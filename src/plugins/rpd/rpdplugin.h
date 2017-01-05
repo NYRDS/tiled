@@ -15,7 +15,7 @@ class Map;
 
 namespace Rpd {
 
-class JSONSHARED_EXPORT RpdPlugin : public Tiled::Plugin
+class RPDSHARED_EXPORT RpdPlugin : public Tiled::Plugin
 {
     Q_OBJECT
     Q_INTERFACES(Tiled::Plugin)
@@ -26,24 +26,20 @@ public:
 };
 
 
-class RPDSHARED_EXPORT RpdMapFormat : public Tiled::MapFormat
+class RPDSHARED_EXPORT RpdMapFormat : public Tiled::WritableMapFormat
 {
     Q_OBJECT
     Q_INTERFACES(Tiled::MapFormat)
 
 public:
     enum SubFormat {
-        Json,
-        JavaScript,
+        Rpd
     };
 
     RpdMapFormat(SubFormat subFormat, QObject *parent = nullptr);
 
-    Tiled::Map *read(const QString &fileName) override;
-    bool supportsFile(const QString &fileName) const override;
 
     bool write(const Tiled::Map *map, const QString &fileName) override;
-
     QString nameFilter() const override;
     QString errorString() const override;
 
