@@ -31,6 +31,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QTextStream>
 
 namespace Rpd {
@@ -55,21 +56,32 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
         return false;
     }
 
-    Tiled::MapToVariantConverter converter;
-    QVariant variant = converter.toVariant(map, QFileInfo(fileName).dir());
+    QJsonObject mapJson;
 
-    JsonWriter writer;
-    writer.setAutoFormatting(true);
+    for(Tiled::Layer *layer: map->layers()) {
+        if(layer->name()=="logic") {
+            mapJson.insert("width",layer->width());
+            mapJson.insert("height",layer->height());
 
-    if (!writer.stringify(variant)) {
-        // This can only happen due to coding error
-        mError = writer.errorString();
-        return false;
+            QJsonArray logicMap;
+            for(int i=0;i<layer->width();++i){
+                for(int j=0;j<layer->height();++j){
+                    logicMap.append(layer->asTileLayer()->cellAt(i,j).tileId());
+                }
+            }
+
+            mapJson.insert("map",logicMap);
+        }
     }
+
+    mapJson.insert("width",16);
 
     QTextStream out(file.device());
 
-    out << writer.result();
+    QJsonDocument mapDoc;
+    mapDoc.setObject(mapJson);
+
+    out << mapDoc.toJson(QJsonDocument::Compact);
 
     out.flush();
 
