@@ -12,6 +12,7 @@ Project {
         "replicaisland",
         "tengine",
         "tmw",
-        "gmx"
+        "gmx",
+        "rpd"
     ]
 }
