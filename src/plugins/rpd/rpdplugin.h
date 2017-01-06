@@ -36,6 +36,13 @@ public:
         Rpd
     };
 
+    enum TileId {
+        ENTRANCE = 7,
+        EXIT = 8,
+        LOCKED_EXIT = 25,
+        UNLOCKED_EXIT = 26
+    };
+
     RpdMapFormat(SubFormat subFormat, QObject *parent = nullptr);
 
 
