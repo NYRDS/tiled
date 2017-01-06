@@ -50,8 +50,8 @@ RpdMapFormat::RpdMapFormat(SubFormat subFormat, QObject *parent)
 QJsonArray packMapData(Tiled::Layer *layer)
 {
     QJsonArray map;
-    for(int i=0;i<layer->width();++i){
-        for(int j=0;j<layer->height();++j){
+    for(int j=0;j<layer->height();++j){
+        for(int i=0;i<layer->width();++i){
             map.append(layer->asTileLayer()->cellAt(i,j).tileId());
         }
     }
@@ -81,7 +81,7 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
             mapJson.insert("map",packMapData(layer));
 
             for(int i=0;i<layer->width();++i){
-                for(int j=0;j<layer->height();++j){
+                for(int j=0;j<layer->height();++j){                    
                     int tileId = layer->asTileLayer()->cellAt(i,j).tileId();
 
                     switch (tileId) {
@@ -113,10 +113,28 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
 
         if(layer->name() == "deco") {
             mapJson.insert("decoTileVar",packMapData(layer));
+            mapJson.insert("customTiles",true);
+
+            auto tilesets = layer->asTileLayer()->usedTilesets();
+
+            if(tilesets.size()==0) {
+                mError = tr("You have deco layer please fill it");
+                return false;
+            }
+
+            if(tilesets.size()>1) {
+                mError = tr("Only one tileset per layer supported");
+                return false;
+            }
+
+            mapJson.insert("tiles",tilesets.begin()->data()->name()+".png");
         }
     }
 
-    mapJson.insert("tiles","tiles0_x.png");
+    if(!mapJson.contains("tiles")){
+        mapJson.insert("tiles","tiles0_x.png");
+    }
+
     mapJson.insert("water","water0.png");
 
     QJsonDocument mapDoc;
@@ -135,6 +153,7 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
 
     QTextStream out(file.device());
     out << writer.result();
+
     out.flush();
 
     if (file.error() != QFileDevice::NoError) {
