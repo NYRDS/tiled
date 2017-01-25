@@ -7,6 +7,7 @@ SUBDIRS = csv \
           json \
           lua \
           replicaisland \
+          rpd \
           tengine \
           tmw
 
