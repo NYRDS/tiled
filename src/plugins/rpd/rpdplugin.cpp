@@ -143,8 +143,8 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
                 ++it;
             }
 
-            mapJson.insert("deco_name",decoName);
-            mapJson.insert("deco_desc",decoDesc);
+            mapJson.insert("decoName",decoName);
+            mapJson.insert("decoDesc",decoDesc);
         }
     }
 
