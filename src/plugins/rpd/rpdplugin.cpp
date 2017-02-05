@@ -128,6 +128,23 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
             }
 
             mapJson.insert("tiles",tilesets.begin()->data()->name()+".png");
+
+            QJsonArray decoDesc;
+            QJsonArray decoName;
+
+            auto decoTileset = tilesets.begin()->data();
+
+            auto it = decoTileset->tiles().constBegin();
+            auto end = decoTileset->tiles().constEnd();
+
+            while (it != end) {
+                decoDesc.append(it.value()->property("deco_desc").toString());
+                decoName.append(it.value()->property("deco_name").toString());
+                ++it;
+            }
+
+            mapJson.insert("deco_name",decoName);
+            mapJson.insert("deco_desc",decoDesc);
         }
     }
 
