@@ -58,6 +58,29 @@ QJsonArray packMapData(Tiled::Layer *layer)
     return map;
 }
 
+bool RpdMapFormat::insertTilesetFile(Tiled::Layer &layer, const QString &tiles_name, QJsonObject &mapJson)
+{
+    auto tilesets = layer.asTileLayer()->usedTilesets();
+
+    if(tilesets.size()==0) {
+        QString msg = QString("You have ")+layer.name()+" layer please fill it";
+        mError = tr(msg.toUtf8());
+        return false;
+    }
+
+    if(tilesets.size()>1) {
+        QString msg = QString("Only one tileset per layer supported (")+layer.name()+" layer)";
+        mError = tr(msg.toUtf8());
+        return false;
+    }
+
+    mapJson.insert(tiles_name,tilesets.begin()->data()->name()+".png");
+    return true;
+}
+
+
+
+
 bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
 {
     Tiled::SaveFile file(fileName);
@@ -79,6 +102,10 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
             mapJson.insert("height",layer->height());
 
             mapJson.insert("map",packMapData(layer));
+
+            if(!insertTilesetFile(*layer,"tiles_logic",mapJson)) {
+                return false;
+            }
 
             for(int i=0;i<layer->width();++i){
                 for(int j=0;j<layer->height();++j){                    
@@ -115,22 +142,14 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
             mapJson.insert("decoTileVar",packMapData(layer));
             mapJson.insert("customTiles",true);
 
-            auto tilesets = layer->asTileLayer()->usedTilesets();
-
-            if(tilesets.size()==0) {
-                mError = tr("You have deco layer please fill it");
+            if(!insertTilesetFile(*layer,"tiles",mapJson)) {
                 return false;
             }
-
-            if(tilesets.size()>1) {
-                mError = tr("Only one tileset per layer supported");
-                return false;
-            }
-
-            mapJson.insert("tiles",tilesets.begin()->data()->name()+".png");
 
             QJsonArray decoDesc;
             QJsonArray decoName;
+
+            auto tilesets = layer->asTileLayer()->usedTilesets();
 
             auto decoTileset = tilesets.begin()->data();
 

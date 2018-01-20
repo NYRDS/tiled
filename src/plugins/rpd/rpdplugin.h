@@ -3,6 +3,7 @@
 
 #include "rpd_global.h"
 
+#include "layer.h"
 #include "mapformat.h"
 #include "plugin.h"
 #include "tilesetformat.h"
@@ -53,6 +54,9 @@ public:
 protected:
     QString mError;
     SubFormat mSubFormat;
+private:
+    bool insertTilesetFile(Tiled::Layer &layer, const QString &tiles_name, QJsonObject &mapJson);
+
 };
 
 
