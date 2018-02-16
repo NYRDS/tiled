@@ -138,6 +138,14 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
             mapJson.insert("baseTileVar",packMapData(layer));
         }
 
+        if(layer->name() == "roof_base") {
+            mapJson.insert("roofBaseTileVar",packMapData(layer));
+        }
+
+        if(layer->name() == "roof_deco") {
+            mapJson.insert("roofDecoTileVar",packMapData(layer));
+        }
+
         if(layer->name() == "deco") {
             mapJson.insert("decoTileVar",packMapData(layer));
             mapJson.insert("customTiles",true);
