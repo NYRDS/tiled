@@ -138,6 +138,10 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
             mapJson.insert("baseTileVar",packMapData(layer));
         }
 
+        if(layer->name() == "deco2") {
+            mapJson.insert("deco2TileVar",packMapData(layer));
+        }
+
         if(layer->name() == "roof_base") {
             mapJson.insert("roofBaseTileVar",packMapData(layer));
         }
@@ -172,6 +176,36 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
 
             mapJson.insert("decoName",decoName);
             mapJson.insert("decoDesc",decoDesc);
+        }
+
+        if(layer->name()=="mobs") {
+            QJsonArray mobs;
+
+            auto mobsTileset = layer->asTileLayer()->usedTilesets().begin()->data();
+
+            for(int j=0;j<layer->height();++j){
+                for(int i=0;i<layer->width();++i){
+                    int tileId = layer->asTileLayer()->cellAt(i,j).tileId();
+
+                    if(tileId >= 0) {
+                        QJsonObject mob;
+                        mob.insert("x",i);
+                        mob.insert("y",j);
+
+                        auto tile = mobsTileset->findTile(tileId);
+
+                        if(tile && !tile->property("kind").toString().isEmpty()) {
+                            mob.insert("kind",tile->property("kind").toString());
+                        } else {
+                            mError = tr("'kind' property not defined for mob, position in tileset : %1").arg(tileId);
+                            return false;
+                        }
+                        mobs.append(mob);
+                    }
+
+                }
+            }
+            mapJson.insert("mobs",mobs);
         }
     }
 
