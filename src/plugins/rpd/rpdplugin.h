@@ -48,6 +48,7 @@ public:
 
 
     bool write(const Tiled::Map *map, const QString &fileName) override;
+    QString shortName(void) const override;
     QString nameFilter() const override;
     QString errorString() const override;
 
@@ -73,6 +74,7 @@ public:
 
     bool write(const Tiled::Tileset &tileset, const QString &fileName) override;
 
+    QString shortName(void) const override;
     QString nameFilter() const override;
     QString errorString() const override;
 

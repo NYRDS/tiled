@@ -47,11 +47,16 @@ RpdMapFormat::RpdMapFormat(SubFormat subFormat, QObject *parent)
     : mSubFormat(subFormat)
 {}
 
+QString RpdMapFormat::shortName(void) const
+{
+    return "RPD";
+}
+
 QJsonArray packMapData(Tiled::Layer *layer)
 {
     QJsonArray map;
-    for(int j=0;j<layer->height();++j){
-        for(int i=0;i<layer->width();++i){
+    for(int j=0;j<layer->map()->height();++j){
+        for(int i=0;i<layer->map()->width();++i){
             map.append(layer->asTileLayer()->cellAt(i,j).tileId());
         }
     }
@@ -98,8 +103,8 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
             QJsonArray entrance;
             QJsonArray multiexit;
 
-            mapJson.insert("width",layer->width());
-            mapJson.insert("height",layer->height());
+            mapJson.insert("width",layer->map()->width());
+            mapJson.insert("height",layer->map()->height());
 
             mapJson.insert("map",packMapData(layer));
 
@@ -107,8 +112,8 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
                 return false;
             }
 
-            for(int i=0;i<layer->width();++i){
-                for(int j=0;j<layer->height();++j){                    
+            for(int i=0;i<layer->map()->width();++i){
+                for(int j=0;j<layer->map()->height();++j){
                     int tileId = layer->asTileLayer()->cellAt(i,j).tileId();
 
                     switch (tileId) {
@@ -183,8 +188,8 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
 
             auto mobsTileset = layer->asTileLayer()->usedTilesets().begin()->data();
 
-            for(int j=0;j<layer->height();++j){
-                for(int i=0;i<layer->width();++i){
+            for(int j=0;j<layer->map()->height();++j){
+                for(int i=0;i<layer->map()->width();++i){
                     int tileId = layer->asTileLayer()->cellAt(i,j).tileId();
 
                     if(tileId >= 0) {
@@ -320,6 +325,11 @@ QString RpdTilesetFormat::nameFilter() const
 QString RpdTilesetFormat::errorString() const
 {
     return mError;
+}
+
+QString RpdTilesetFormat::shortName(void) const
+{
+    return "RPD";
 }
 
 } // namespace Rpd
