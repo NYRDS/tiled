@@ -18,15 +18,16 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef TMXMAPFORMAT_H
-#define TMXMAPFORMAT_H
+#pragma once
 
 #include "mapformat.h"
 #include "tilesetformat.h"
+#include "objecttemplateformat.h"
 
 namespace Tiled {
 
 class Tileset;
+class MapObject;
 
 namespace Internal {
 
@@ -62,7 +63,9 @@ public:
      */
     Map *fromByteArray(const QByteArray &data);
 
-    QString nameFilter() const override { return tr("Tiled map files (*.tmx)"); }
+    QString nameFilter() const override { return tr("Tiled map files (*.tmx *.xml)"); }
+
+    QString shortName() const override { return QLatin1String("tmx"); }
 
     bool supportsFile(const QString &fileName) const override;
 
@@ -88,7 +91,36 @@ public:
 
     bool write(const Tileset &tileset, const QString &fileName) override;
 
-    QString nameFilter() const override { return tr("Tiled tileset files (*.tsx)"); }
+    QString nameFilter() const override { return tr("Tiled tileset files (*.tsx *.xml)"); }
+
+    QString shortName() const override { return QLatin1String("tsx"); }
+
+    bool supportsFile(const QString &fileName) const override;
+
+    QString errorString() const override { return mError; }
+
+private:
+    QString mError;
+};
+
+/**
+ * A reader and writer for Tiled's .tgx template format.
+ */
+class XmlObjectTemplateFormat : public ObjectTemplateFormat
+{
+    Q_OBJECT
+    Q_INTERFACES(Tiled::ObjectTemplateFormat)
+
+public:
+    XmlObjectTemplateFormat(QObject *parent = nullptr);
+
+    ObjectTemplate *read(const QString &fileName) override;
+
+    bool write(const ObjectTemplate *objectTemplate, const QString &fileName) override;
+
+    QString nameFilter() const override { return tr("Tiled template files (*.tx)"); }
+
+    QString shortName() const override { return QLatin1String("tx"); }
 
     bool supportsFile(const QString &fileName) const override;
 
@@ -100,5 +132,3 @@ private:
 
 } // namespace Internal
 } // namespace Tiled
-
-#endif // TMXMAPFORMAT_H

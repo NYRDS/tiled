@@ -18,8 +18,7 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef TILED_INTERNAL_MAINTOOLBAR_H
-#define TILED_INTERNAL_MAINTOOLBAR_H
+#pragma once
 
 #include <QToolBar>
 
@@ -33,6 +32,8 @@ class Document;
 
 class MainToolBar : public QToolBar
 {
+    Q_OBJECT
+
 public:
     MainToolBar(QWidget *parent = nullptr);
 
@@ -57,5 +58,3 @@ private:
 
 } // namespace Internal
 } // namespace Tiled
-
-#endif // TILED_INTERNAL_MAINTOOLBAR_H

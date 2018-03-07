@@ -40,14 +40,12 @@
 using namespace Tiled;
 
 ObjectGroup::ObjectGroup()
-    : Layer(ObjectGroupType, QString(), 0, 0, 0, 0)
-    , mDrawOrder(TopDownOrder)
+    : ObjectGroup(QString(), 0, 0)
 {
 }
 
-ObjectGroup::ObjectGroup(const QString &name,
-                         int x, int y, int width, int height)
-    : Layer(ObjectGroupType, name, x, y, width, height)
+ObjectGroup::ObjectGroup(const QString &name, int x, int y)
+    : Layer(ObjectGroupType, name, x, y)
     , mDrawOrder(TopDownOrder)
 {
 }
@@ -161,19 +159,24 @@ void ObjectGroup::offsetObjects(const QPointF &offset,
                                 const QRectF &bounds,
                                 bool wrapX, bool wrapY)
 {
+    if (offset.isNull())
+        return;
+
+    const bool boundsValid = bounds.isValid();
+
     for (MapObject *object : mObjects) {
         const QPointF objectCenter = object->bounds().center();
-        if (!bounds.contains(objectCenter))
+        if (boundsValid && !bounds.contains(objectCenter))
             continue;
 
         QPointF newCenter(objectCenter + offset);
 
-        if (wrapX && bounds.width() > 0) {
+        if (wrapX && boundsValid) {
             qreal nx = std::fmod(newCenter.x() - bounds.left(), bounds.width());
             newCenter.setX(bounds.left() + (nx < 0 ? bounds.width() + nx : nx));
         }
 
-        if (wrapY && bounds.height() > 0) {
+        if (wrapY && boundsValid) {
             qreal ny = std::fmod(newCenter.y() - bounds.top(), bounds.height());
             newCenter.setY(bounds.top() + (ny < 0 ? bounds.height() + ny : ny));
         }
@@ -193,7 +196,7 @@ Layer *ObjectGroup::mergedWith(Layer *other) const
 
     const ObjectGroup *og = static_cast<ObjectGroup*>(other);
 
-    ObjectGroup *merged = static_cast<ObjectGroup*>(clone());
+    ObjectGroup *merged = clone();
     for (const MapObject *mapObject : og->objects())
         merged->addObject(mapObject->clone());
     return merged;
@@ -204,9 +207,9 @@ Layer *ObjectGroup::mergedWith(Layer *other) const
  *
  * \sa Layer::clone()
  */
-Layer *ObjectGroup::clone() const
+ObjectGroup *ObjectGroup::clone() const
 {
-    return initializeClone(new ObjectGroup(mName, mX, mY, mWidth, mHeight));
+    return initializeClone(new ObjectGroup(mName, mX, mY));
 }
 
 /**

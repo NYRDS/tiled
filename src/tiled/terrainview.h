@@ -19,8 +19,7 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef TERRAINVIEW_H
-#define TERRAINVIEW_H
+#pragma once
 
 #include "terrainmodel.h"
 
@@ -52,9 +51,14 @@ public:
      */
     Terrain *terrainAt(const QModelIndex &index) const;
 
+signals:
+    void removeTerrainTypeRequested();
+
 protected:
+    bool event(QEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
 
 private slots:
     void editTerrainProperties();
@@ -70,5 +74,3 @@ private:
 } // namespace Tiled
 
 Q_DECLARE_METATYPE(Tiled::Internal::TerrainView *)
-
-#endif // TERRAINVIEW_H

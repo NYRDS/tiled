@@ -19,9 +19,9 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef TILESETCHANGES_H
-#define TILESETCHANGES_H
+#pragma once
 
+#include "tileset.h"
 #include "undocommands.h"
 
 #include <QColor>
@@ -52,6 +52,7 @@ private:
     QString mNewName;
 };
 
+
 class ChangeTilesetTileOffset : public QUndoCommand
 {
 public:
@@ -70,6 +71,7 @@ private:
     QPoint mNewTileOffset;
 };
 
+
 struct TilesetParameters
 {
     TilesetParameters()
@@ -81,7 +83,7 @@ struct TilesetParameters
 
     bool operator != (const TilesetParameters &other) const;
 
-    QString imageSource;
+    QUrl imageSource;
     QColor transparentColor;
     QSize tileSize;
     int tileSpacing;
@@ -101,10 +103,10 @@ private:
     void apply(const TilesetParameters &parameters);
 
     TilesetDocument *mTilesetDocument;
-    Tileset &mTileset;
     TilesetParameters mOldParameters;
     TilesetParameters mNewParameters;
 };
+
 
 class ChangeTilesetColumnCount : public QUndoCommand
 {
@@ -119,9 +121,9 @@ private:
     void swap();
 
     TilesetDocument *mTilesetDocument;
-    Tileset &mTileset;
     int mColumnCount;
 };
+
 
 class ChangeTilesetBackgroundColor : public QUndoCommand
 {
@@ -139,7 +141,39 @@ private:
     QColor mColor;
 };
 
+
+class ChangeTilesetOrientation : public QUndoCommand
+{
+public:
+    ChangeTilesetOrientation(TilesetDocument *tilesetDocument,
+                             Tileset::Orientation orientation);
+
+    void undo() override { swap(); }
+    void redo() override { swap(); }
+
+private:
+    void swap();
+
+    TilesetDocument *mTilesetDocument;
+    Tileset::Orientation mOrientation;
+};
+
+
+class ChangeTilesetGridSize : public QUndoCommand
+{
+public:
+    ChangeTilesetGridSize(TilesetDocument *tilesetDocument,
+                          QSize gridSize);
+
+    void undo() override { swap(); }
+    void redo() override { swap(); }
+
+private:
+    void swap();
+
+    TilesetDocument *mTilesetDocument;
+    QSize mGridSize;
+};
+
 } // namespace Internal
 } // namespace Tiled
-
-#endif // TILESETCHANGES_H

@@ -23,13 +23,19 @@
 #include "preferences.h"
 
 #include <QAction>
-#include <QCoreApplication>
+#include <QApplication>
+#include <QClipboard>
+#include <QDir>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QImageReader>
 #include <QImageWriter>
+#include <QKeyEvent>
 #include <QMainWindow>
 #include <QMenu>
+#include <QProcess>
 #include <QRegExp>
+#include <QScreen>
 #include <QSettings>
 
 static QString toImageFileFilter(const QList<QByteArray> &formats)
@@ -46,24 +52,6 @@ static QString toImageFileFilter(const QList<QByteArray> &formats)
     }
     filter += QLatin1Char(')');
     return filter;
-}
-
-// Makes a list of filters from a normal filter string "Image Files (*.png *.jpg)"
-//
-// Copied from qplatformdialoghelper.cpp in Qt, used under the terms of the GPL
-// version 2.0.
-static QStringList cleanFilterList(const QString &filter)
-{
-    const char filterRegExp[] =
-    "^(.*)\\(([a-zA-Z0-9_.,*? +;#\\-\\[\\]@\\{\\}/!<>\\$%&=^~:\\|]*)\\)$";
-
-    QRegExp regexp(QString::fromLatin1(filterRegExp));
-    Q_ASSERT(regexp.isValid());
-    QString f = filter;
-    int i = regexp.indexIn(f);
-    if (i >= 0)
-        f = regexp.cap(2);
-    return f.split(QLatin1Char(' '), QString::SkipEmptyParts);
 }
 
 namespace Tiled {
@@ -83,6 +71,24 @@ QString readableImageFormatsFilter()
 QString writableImageFormatsFilter()
 {
     return toImageFileFilter(QImageWriter::supportedImageFormats());
+}
+
+// Makes a list of filters from a normal filter string "Image Files (*.png *.jpg)"
+//
+// Copied from qplatformdialoghelper.cpp in Qt, used under the terms of the GPL
+// version 2.0.
+QStringList cleanFilterList(const QString &filter)
+{
+    const char filterRegExp[] =
+    "^(.*)\\(([a-zA-Z0-9_.,*? +;#\\-\\[\\]@\\{\\}/!<>\\$%&=^~:\\|]*)\\)$";
+
+    QRegExp regexp(QString::fromLatin1(filterRegExp));
+    Q_ASSERT(regexp.isValid());
+    QString f = filter;
+    int i = regexp.indexIn(f);
+    if (i >= 0)
+        f = regexp.cap(2);
+    return f.split(QLatin1Char(' '), QString::SkipEmptyParts);
 }
 
 /**
@@ -142,6 +148,131 @@ void saveGeometry(QWidget *widget)
         const QString stateKey = widget->objectName() + QLatin1String("/State");
         settings->setValue(stateKey, mainWindow->saveState());
     }
+}
+
+qreal defaultDpiScale()
+{
+    static qreal scale = []() {
+        if (const QScreen *screen = QGuiApplication::primaryScreen())
+            return screen->logicalDotsPerInchX() / 96.0;
+        return 1.0;
+    }();
+    return scale;
+}
+
+qreal dpiScaled(qreal value)
+{
+#ifdef Q_OS_MAC
+    // On mac the DPI is always 72 so we should not scale it
+    return value;
+#else
+    static const qreal scale = defaultDpiScale();
+    return value * scale;
+#endif
+}
+
+QSize dpiScaled(QSize value)
+{
+    return QSize(qRound(dpiScaled(value.width())),
+                 qRound(dpiScaled(value.height())));
+}
+
+QPoint dpiScaled(QPoint value)
+{
+    return QPoint(qRound(dpiScaled(value.x())),
+                  qRound(dpiScaled(value.y())));
+}
+
+QRectF dpiScaled(QRectF value)
+{
+    return QRectF(dpiScaled(value.x()),
+                  dpiScaled(value.y()),
+                  dpiScaled(value.width()),
+                  dpiScaled(value.height()));
+}
+
+QSize smallIconSize()
+{
+    static QSize size = dpiScaled(QSize(16, 16));
+    return size;
+}
+
+bool isZoomInShortcut(QKeyEvent *event)
+{
+    if (event->matches(QKeySequence::ZoomIn))
+        return true;
+    if (event->key() == Qt::Key_Plus)
+        return true;
+    if (event->key() == Qt::Key_Equal)
+        return true;
+
+    return false;
+}
+
+bool isZoomOutShortcut(QKeyEvent *event)
+{
+    if (event->matches(QKeySequence::ZoomOut))
+        return true;
+    if (event->key() == Qt::Key_Minus)
+        return true;
+    if (event->key() == Qt::Key_Underscore)
+        return true;
+
+    return false;
+}
+
+bool isResetZoomShortcut(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_0 && event->modifiers() & Qt::ControlModifier)
+        return true;
+
+    return false;
+}
+
+/*
+ * Code based on FileUtils::showInGraphicalShell from Qt Creator
+ * Copyright (C) 2016 The Qt Company Ltd.
+ * Used under the terms of the GNU General Public License version 3
+ */
+static void showInFileManager(const QString &fileName)
+{
+    // Mac, Windows support folder or file.
+#if defined(Q_OS_WIN)
+    QStringList param;
+    if (!QFileInfo(fileName).isDir())
+        param += QLatin1String("/select,");
+    param += QDir::toNativeSeparators(fileName);
+    QProcess::startDetached(QLatin1String("explorer.exe"), param);
+#elif defined(Q_OS_MAC)
+    QStringList scriptArgs;
+    scriptArgs << QLatin1String("-e")
+               << QString::fromLatin1("tell application \"Finder\" to reveal POSIX file \"%1\"")
+                                     .arg(fileName);
+    QProcess::execute(QLatin1String("/usr/bin/osascript"), scriptArgs);
+    scriptArgs.clear();
+    scriptArgs << QLatin1String("-e")
+               << QLatin1String("tell application \"Finder\" to activate");
+    QProcess::execute(QLatin1String("/usr/bin/osascript"), scriptArgs);
+#else
+    // We cannot select a file here, because xdg-open would open the file
+    // instead of the file browser...
+    QProcess::startDetached(QString(QLatin1String("xdg-open \"%1\""))
+                            .arg(QFileInfo(fileName).absolutePath()));
+#endif
+}
+
+void addFileManagerActions(QMenu &menu, const QString &fileName)
+{
+    QAction *copyPath = menu.addAction(QCoreApplication::translate("Utils", "Copy File Path"));
+    QObject::connect(copyPath, &QAction::triggered, [fileName] {
+        QClipboard *clipboard = QApplication::clipboard();
+        clipboard->setText(QDir::toNativeSeparators(fileName));
+    });
+
+    QAction *openFolder = menu.addAction(QCoreApplication::translate("Utils", "Open Containing Folder..."));
+    QObject::connect(openFolder, &QAction::triggered, [fileName] {
+        showInFileManager(fileName);
+    });
 }
 
 } // namespace Utils

@@ -23,7 +23,7 @@
 #include "abstracttool.h"
 
 #include <QAction>
-#include <QActionGroup>
+#include <QShortcut>
 
 using namespace Tiled;
 using namespace Tiled::Internal;
@@ -35,6 +35,8 @@ ToolManager::ToolManager(QObject *parent)
     , mDisabledTool(nullptr)
     , mPreviouslyDisabledTool(nullptr)
     , mMapDocument(nullptr)
+    , mTile(nullptr)
+    , mObjectTemplate(nullptr)
     , mSelectEnabledToolPending(false)
 {
     mActionGroup->setExclusive(true);
@@ -56,7 +58,8 @@ void ToolManager::setMapDocument(MapDocument *mapDocument)
 
     mMapDocument = mapDocument;
 
-    foreach (QAction *action, mActionGroup->actions()) {
+    const auto actions = mActionGroup->actions();
+    for (QAction *action : actions) {
         AbstractTool *tool = action->data().value<AbstractTool*>();
         tool->setMapDocument(mapDocument);
     }
@@ -70,15 +73,23 @@ void ToolManager::setMapDocument(MapDocument *mapDocument)
  */
 QAction *ToolManager::registerTool(AbstractTool *tool)
 {
+    Q_ASSERT(!tool->mToolManager);
+    tool->mToolManager = this;
+
     tool->setMapDocument(mMapDocument);
 
     QAction *toolAction = new QAction(tool->icon(), tool->name(), this);
     toolAction->setShortcut(tool->shortcut());
     toolAction->setData(QVariant::fromValue<AbstractTool*>(tool));
     toolAction->setCheckable(true);
-    toolAction->setToolTip(
-            QString(QLatin1String("%1 (%2)")).arg(tool->name(),
-                                                  tool->shortcut().toString()));
+    if (!tool->shortcut().isEmpty()) {
+        toolAction->setToolTip(
+                QString(QLatin1String("%1 (%2)")).arg(tool->name(),
+                                                      tool->shortcut().toString()));
+    } else {
+        toolAction->setToolTip(tool->name());
+    }
+
     toolAction->setEnabled(tool->isEnabled());
     mActionGroup->addAction(toolAction);
 
@@ -96,26 +107,30 @@ QAction *ToolManager::registerTool(AbstractTool *tool)
 
 /**
  * Selects the given tool. It should be previously added using registerTool().
+ *
+ * Returns whether the tool was succesfully selected.
  */
-void ToolManager::selectTool(AbstractTool *tool)
+bool ToolManager::selectTool(AbstractTool *tool)
 {
     if (mSelectedTool == tool)
-        return;
+        return true;
 
     if (tool && !tool->isEnabled()) // Refuse to select disabled tools
-        return;
+        return false;
 
-    foreach (QAction *action, mActionGroup->actions()) {
+    const auto actions = mActionGroup->actions();
+    for (QAction *action : actions) {
         if (action->data().value<AbstractTool*>() == tool) {
             action->trigger();
-            return;
+            return true;
         }
     }
 
     // The given tool was not found. Don't select any tool.
-    foreach (QAction *action, mActionGroup->actions())
+    for (QAction *action : actions)
         action->setChecked(false);
     setSelectedTool(nullptr);
+    return tool == nullptr;
 }
 
 void ToolManager::actionTriggered(QAction *action)
@@ -126,7 +141,8 @@ void ToolManager::actionTriggered(QAction *action)
 void ToolManager::retranslateTools()
 {
     // Allow the tools to adapt to the new language
-    foreach (QAction *action, mActionGroup->actions()) {
+    const auto actions = mActionGroup->actions();
+    for (QAction *action : actions) {
         AbstractTool *tool = action->data().value<AbstractTool*>();
         tool->languageChanged();
 
@@ -138,11 +154,43 @@ void ToolManager::retranslateTools()
     }
 }
 
+/**
+ * Replaces the shortcuts set on the actions with QShortcut instances, using
+ * \a parent as their parent.
+ *
+ * This is done to make sure the shortcuts can still be used even when the
+ * actions are only added to a tool bar and this tool bar is hidden.
+ */
+void ToolManager::createShortcuts(QWidget *parent)
+{
+    const auto actions = mActionGroup->actions();
+    for (QAction *action : actions) {
+        QKeySequence key = action->shortcut();
+
+        if (!key.isEmpty()) {
+            auto shortcut = new QShortcut(key, parent);
+
+            // Make sure the shortcut is only enabled when the action is,
+            // because different tools may use the same shortcut.
+            shortcut->setEnabled(action->isEnabled());
+            connect(action, &QAction::changed, shortcut, [=]() {
+                shortcut->setEnabled(action->isEnabled());
+            });
+
+            connect(shortcut, &QShortcut::activated, action, &QAction::trigger);
+
+            // Unset the shortcut from the action to avoid ambiguous overloads
+            action->setShortcut(QKeySequence());
+        }
+    }
+}
+
 void ToolManager::toolEnabledChanged(bool enabled)
 {
     AbstractTool *tool = qobject_cast<AbstractTool*>(sender());
 
-    foreach (QAction *action, mActionGroup->actions()) {
+    const auto actions = mActionGroup->actions();
+    for (QAction *action : actions) {
         if (action->data().value<AbstractTool*>() == tool) {
             action->setEnabled(enabled);
             break;
@@ -185,7 +233,8 @@ void ToolManager::selectEnabledTool()
 
 AbstractTool *ToolManager::firstEnabledTool() const
 {
-    foreach (QAction *action, mActionGroup->actions())
+    const auto actions = mActionGroup->actions();
+    for (QAction *action : actions)
         if (AbstractTool *tool = action->data().value<AbstractTool*>())
             if (tool->isEnabled())
                 return tool;

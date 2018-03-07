@@ -70,7 +70,8 @@ AdjustTileIndexes::AdjustTileIndexes(MapDocument *mapDocument,
     QVector<MapObjectCell> objectChanges;
 
     // Adjust tile references from map layers
-    for (Layer *layer : mapDocument->map()->layers()) {
+    LayerIterator iterator(mapDocument->map());
+    while (Layer *layer = iterator.next()) {
         switch (layer->layerType()) {
         case Layer::TileLayerType: {
             TileLayer *tileLayer = static_cast<TileLayer*>(layer);
@@ -107,7 +108,8 @@ AdjustTileIndexes::AdjustTileIndexes(MapDocument *mapDocument,
 
         case Layer::ObjectGroupType:
             for (MapObject *mapObject : *static_cast<ObjectGroup*>(layer)) {
-                if (isFromTileset(mapObject->cell())) {
+                if ((!mapObject->isTemplateInstance() || mapObject->propertyChanged(MapObject::CellProperty))
+                        && isFromTileset(mapObject->cell())) {
                     MapObjectCell change;
                     change.object = mapObject;
                     change.cell = adjustCell(mapObject->cell());
@@ -117,6 +119,7 @@ AdjustTileIndexes::AdjustTileIndexes(MapDocument *mapDocument,
             break;
 
         case Layer::ImageLayerType:
+        case Layer::GroupLayerType:
             break;
         }
     }
@@ -149,7 +152,7 @@ AdjustTileMetaData::AdjustTileMetaData(TilesetDocument *tilesetDocument)
 
     // Adjust tile meta data
     QList<Tile*> tilesChangingProbability;
-    QList<float> tileProbabilities;
+    QList<qreal> tileProbabilities;
     ChangeTileTerrain::Changes terrainChanges;
     QSet<Tile*> tilesToReset;
 
@@ -167,7 +170,7 @@ AdjustTileMetaData::AdjustTileMetaData(TilesetDocument *tilesetDocument)
     auto applyMetaData = [&](Tile *toTile,
                              const Properties &properties,
                              unsigned terrain,
-                             float probability,
+                             qreal probability,
                              ObjectGroup *objectGroup,
                              const QVector<Frame> &frames)
     {
@@ -212,7 +215,7 @@ AdjustTileMetaData::AdjustTileMetaData(TilesetDocument *tilesetDocument)
 
         ObjectGroup *objectGroup = nullptr;
         if (fromTile->objectGroup())
-            objectGroup = static_cast<ObjectGroup*>(fromTile->objectGroup()->clone());
+            objectGroup = fromTile->objectGroup()->clone();
 
         applyMetaData(toTile,
                       fromTile->properties(),
@@ -239,7 +242,7 @@ AdjustTileMetaData::AdjustTileMetaData(TilesetDocument *tilesetDocument)
     QSetIterator<Tile*> resetIterator(tilesToReset);
     while (resetIterator.hasNext()) {
         applyMetaData(resetIterator.next(),
-                      Properties(), -1, 1.0f, nullptr, QVector<Frame>());
+                      Properties(), -1, 1.0, nullptr, QVector<Frame>());
     }
 
     if (!tilesChangingProbability.isEmpty()) {

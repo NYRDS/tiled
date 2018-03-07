@@ -23,7 +23,6 @@
 #include "maptovariantconverter.h"
 #include "randompicker.h"
 #include "tilelayer.h"
-#include "tilesetmanager.h"
 #include "varianttomapconverter.h"
 
 #include <QDebug>
@@ -46,10 +45,10 @@ public:
     TileStampData(const TileStampData &other);
     ~TileStampData();
 
+    int quickStampIndex;
     QString name;
     QString fileName;
     QVector<TileStampVariation> variations;
-    int quickStampIndex;
 };
 
 TileStampData::TileStampData()
@@ -58,29 +57,21 @@ TileStampData::TileStampData()
 
 TileStampData::TileStampData(const TileStampData &other)
     : QSharedData(other)
+    , quickStampIndex(-1)
     , name(other.name)
     , fileName()                        // not copied
     , variations(other.variations)
-    , quickStampIndex(-1)
 {
-    TilesetManager *tilesetManager = TilesetManager::instance();
-
     // deep-copy the map data
-    for (TileStampVariation &variation : variations) {
+    for (TileStampVariation &variation : variations)
         variation.map = new Map(*variation.map);
-        tilesetManager->addReferences(variation.map->tilesets());
-    }
 }
 
 TileStampData::~TileStampData()
 {
-    TilesetManager *tilesetManager = TilesetManager::instance();
-
     // decrease reference to tilesets and delete maps
-    for (const TileStampVariation &variation : variations) {
-        tilesetManager->removeReferences(variation.map->tilesets());
+    for (const TileStampVariation &variation : variations)
         delete variation.map;
-    }
 }
 
 
@@ -89,6 +80,11 @@ TileStamp::TileStamp()
 {
 }
 
+/**
+ * Constructs a tile stamp with the given \a map as its only variation.
+ *
+ * The stamp takes ownership over the map.
+ */
 TileStamp::TileStamp(Map *map)
     : d(new TileStampData)
 {
@@ -150,8 +146,9 @@ QSize TileStamp::maxSize() const
 {
     QSize size;
     for (const TileStampVariation &variation : d->variations) {
-        size.setWidth(qMax(size.width(), variation.map->width()));
-        size.setHeight(qMax(size.height(), variation.map->height()));
+        const QSize variationSize = variation.tileLayer()->size();
+        size.setWidth(qMax(size.width(), variationSize.width()));
+        size.setHeight(qMax(size.height(), variationSize.height()));
     }
     return size;
 }
@@ -169,27 +166,16 @@ const QVector<TileStampVariation> &TileStamp::variations() const
 void TileStamp::addVariation(Map *map, qreal probability)
 {
     Q_ASSERT(map);
-
-    // increase tileset reference counts to keep watching them
-    TilesetManager::instance()->addReferences(map->tilesets());
-
     d->variations.append(TileStampVariation(map, probability));
 }
 
 /**
  * Takes the variation map at \a index. Ownership of the map is passed to the
- * caller, who also has to make sure to handle tileset reference counting.
+ * caller.
  */
 Map *TileStamp::takeVariation(int index)
 {
     return d->variations.takeAt(index).map;
-}
-
-void TileStamp::deleteVariation(int index)
-{
-    Map *map = takeVariation(index);
-    TilesetManager::instance()->removeReferences(map->tilesets());
-    delete map;
 }
 
 /**
@@ -232,7 +218,24 @@ TileStamp TileStamp::flipped(FlipDirection direction) const
 
     for (const TileStampVariation &variation : flipped.variations()) {
         TileLayer *layer = variation.tileLayer();
-        layer->flip(direction);
+
+        if (variation.map->isStaggered()) {
+            Map::StaggerAxis staggerAxis = variation.map->staggerAxis();
+
+            if (staggerAxis == Map::StaggerY) {
+                if ((direction == FlipVertically && !(layer->height() & 1)) || direction == FlipHorizontally)
+                    variation.map->invertStaggerIndex();
+
+            } else {
+                if ((direction == FlipHorizontally && !(layer->width() & 1)) || direction == FlipVertically)
+                    variation.map->invertStaggerIndex();
+            }
+        }
+
+        if (variation.map->orientation() == Map::Hexagonal)
+            layer->flipHexagonal(direction);
+        else
+            layer->flip(direction);
     }
 
     return flipped;
@@ -249,7 +252,10 @@ TileStamp TileStamp::rotated(RotateDirection direction) const
 
     for (const TileStampVariation &variation : rotated.variations()) {
         TileLayer *layer = variation.tileLayer();
-        layer->rotate(direction);
+        if (variation.map->orientation() == Map::Hexagonal)
+            layer->rotateHexagonal(direction, variation.map);
+        else
+            layer->rotate(direction);
 
         variation.map->setWidth(layer->width());
         variation.map->setHeight(layer->height());
@@ -280,7 +286,7 @@ QJsonObject TileStamp::toJson(const QDir &dir) const
     QJsonArray variations;
     for (const TileStampVariation &variation : d->variations) {
         MapToVariantConverter converter;
-        QVariant mapVariant = converter.toVariant(variation.map, dir);
+        QVariant mapVariant = converter.toVariant(*variation.map, dir);
         QJsonValue mapJson = QJsonValue::fromVariant(mapVariant);
 
         QJsonObject variationJson;

@@ -18,8 +18,7 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef TILED_INTERNAL_TILESTAMP_H
-#define TILED_INTERNAL_TILESTAMP_H
+#pragma once
 
 #include "map.h"
 #include "tiled.h"
@@ -43,7 +42,7 @@ struct TileStampVariation
     TileStampVariation(Map *map, qreal probability = 1.0)
         : map(map), probability(probability)
     {
-        Q_ASSERT(map->layerCount() == 1);
+        Q_ASSERT(map->layerCount() >= 1);
         Q_ASSERT(map->layerAt(0)->isTileLayer());
     }
 
@@ -84,7 +83,6 @@ public:
     void addVariation(Map *map, qreal probability = 1.0);
     void addVariation(const TileStampVariation &variation);
     Map *takeVariation(int index);
-    void deleteVariation(int index);
     bool isEmpty() const;
 
     int quickStampIndex() const;
@@ -117,5 +115,3 @@ inline void TileStamp::addVariation(const TileStampVariation &variation)
 
 } // namespace Internal
 } // namespace Tiled
-
-#endif // TILED_INTERNAL_TILESTAMP_H

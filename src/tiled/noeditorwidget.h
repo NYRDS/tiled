@@ -18,8 +18,7 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef TILED_INTERNAL_NOEDITORWIDGET_H
-#define TILED_INTERNAL_NOEDITORWIDGET_H
+#pragma once
 
 #include <QWidget>
 
@@ -35,7 +34,7 @@ class NoEditorWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit NoEditorWidget(QWidget *parent = 0);
+    explicit NoEditorWidget(QWidget *parent = nullptr);
     ~NoEditorWidget();
 
 protected:
@@ -44,6 +43,7 @@ protected:
 private slots:
     void newMap();
     void newTileset();
+    void openFile();
 
 private:
     Ui::NoEditorWidget *ui;
@@ -51,5 +51,3 @@ private:
 
 } // namespace Internal
 } // namespace Tiled
-
-#endif // TILED_INTERNAL_NOEDITORWIDGET_H

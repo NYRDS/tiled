@@ -18,11 +18,11 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef PAINTTILELAYER_H
-#define PAINTTILELAYER_H
+#pragma once
 
 #include "undocommands.h"
 
+#include <QHash>
 #include <QRegion>
 #include <QUndoCommand>
 
@@ -72,7 +72,7 @@ public:
                    const QRegion &paintRegion,
                    QUndoCommand *parent = nullptr);
 
-    ~PaintTileLayer();
+    ~PaintTileLayer() override;
 
     /**
      * Sets whether this undo command can be merged with an existing command.
@@ -86,12 +86,18 @@ public:
     bool mergeWith(const QUndoCommand *other) override;
 
 private:
+    struct LayerData
+    {
+        void mergeWith(const LayerData &o);
+
+        TileLayer *mSource = nullptr;
+        TileLayer *mErased = nullptr;
+        int mX, mY;
+        QRegion mPaintedRegion;
+    };
+
     MapDocument *mMapDocument;
-    TileLayer *mTarget;
-    TileLayer *mSource;
-    TileLayer *mErased;
-    int mX, mY;
-    QRegion mPaintedRegion;
+    QHash<TileLayer*, LayerData> mLayerData;
     bool mMergeable;
 };
 
@@ -102,5 +108,3 @@ inline void PaintTileLayer::setMergeable(bool mergeable)
 
 } // namespace Internal
 } // namespace Tiled
-
-#endif // PAINTTILELAYER_H

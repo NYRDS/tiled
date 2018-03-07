@@ -21,8 +21,7 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef TERRAINDOCK_H
-#define TERRAINDOCK_H
+#pragma once
 
 #include <QDockWidget>
 #include <QMap>
@@ -39,8 +38,10 @@ namespace Internal {
 
 class Document;
 class TerrainFilterModel;
+class TerrainModel;
 class TerrainView;
 class TilesetDocument;
+class TilesetDocumentsFilterModel;
 
 /**
  * The dock widget that displays the terrains. Also keeps track of the
@@ -51,12 +52,8 @@ class TerrainDock : public QDockWidget
     Q_OBJECT
 
 public:
-    /**
-     * Constructor.
-     */
     TerrainDock(QWidget *parent = nullptr);
-
-    ~TerrainDock();
+    ~TerrainDock() override;
 
     /**
      * Sets the document for which the terrains should be displayed. This can
@@ -96,20 +93,27 @@ private slots:
     void indexPressed(const QModelIndex &index);
     void expandRows(const QModelIndex &parent, int first, int last);
     void eraseTerrainButtonClicked();
+    void rowsMoved();
 
 private:
     void retranslateUi();
 
     QModelIndex terrainIndex(Terrain *terrain) const;
+    void moveTerrainTypeUp();
+    void moveTerrainTypeDown();
 
     QToolBar *mToolBar;
     QAction *mAddTerrainType;
     QAction *mRemoveTerrainType;
+    QAction *mMoveTerrainTypeUp;
+    QAction *mMoveTerrainTypeDown;
 
     Document *mDocument;
     TerrainView *mTerrainView;
     QPushButton *mEraseTerrainButton;
     Terrain *mCurrentTerrain;
+    TilesetDocumentsFilterModel *mTilesetDocumentsFilterModel;
+    TerrainModel *mTerrainModel;
     TerrainFilterModel *mProxyModel;
 
     bool mInitializing;
@@ -117,5 +121,3 @@ private:
 
 } // namespace Internal
 } // namespace Tiled
-
-#endif // TERRAINDOCK_H

@@ -20,11 +20,11 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef TILESETDOCK_H
-#define TILESETDOCK_H
+#pragma once
 
 #include "tileset.h"
 
+#include <QAbstractItemModel>
 #include <QDockWidget>
 #include <QList>
 #include <QMap>
@@ -34,7 +34,6 @@ class QActionGroup;
 class QComboBox;
 class QMenu;
 class QModelIndex;
-class QSignalMapper;
 class QStackedWidget;
 class QTabBar;
 class QToolBar;
@@ -52,6 +51,7 @@ namespace Internal {
 class Document;
 class MapDocument;
 class TilesetDocument;
+class TilesetDocumentsFilterModel;
 class TilesetView;
 class TileStamp;
 class Zoomable;
@@ -98,7 +98,8 @@ signals:
     /**
      * Emitted when files are dropped at the tileset dock.
      */
-    void tilesetsDropped(const QStringList &paths);
+    // todo: change to QList<QUrl>
+    void localFilesDropped(const QStringList &paths);
 
 protected:
     void changeEvent(QEvent *e) override;
@@ -113,9 +114,10 @@ private slots:
 
     void updateActions();
     void updateCurrentTiles();
+    void indexPressed(const QModelIndex &index);
 
     void tilesetChanged(Tileset *tileset);
-    void tilesetNameChanged(Tileset *tileset);
+    void tilesetFileNameChanged(const QString &fileName);
 
     void tileImageSourceChanged(Tile *tile);
     void tileAnimationChanged(Tile *tile);
@@ -130,12 +132,21 @@ private slots:
 
     void refreshTilesetMenu();
 
+    void swapTiles(Tile *tileA, Tile *tileB);
+
 private:
     void setCurrentTile(Tile *tile);
     void setCurrentTiles(TileLayer *tiles);
     void retranslateUi();
 
-    void updateTilesets();
+    void onTilesetRowsInserted(const QModelIndex &parent, int first, int last);
+    void onTilesetRowsAboutToBeRemoved(const QModelIndex &parent, int first, int last);
+    void onTilesetRowsMoved(const QModelIndex &parent, int start, int end, const QModelIndex &destination, int row);
+    void onTilesetLayoutChanged(const QList<QPersistentModelIndex> &parents, QAbstractItemModel::LayoutChangeHint hint);
+    void onTilesetDataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight);
+
+    void onTabMoved(int from, int to);
+    void tabContextMenuRequested(const QPoint &pos);
 
     Tileset *currentTileset() const;
     TilesetView *currentTilesetView() const;
@@ -151,8 +162,10 @@ private:
     // Shared tileset references because the dock wants to add new tiles
     QVector<SharedTileset> mTilesets;
     QList<TilesetDocument *> mTilesetDocuments;
+    TilesetDocumentsFilterModel *mTilesetDocumentsFilterModel;
 
     QTabBar *mTabBar;
+    QStackedWidget *mSuperViewStack;
     QStackedWidget *mViewStack;
     QToolBar *mToolBar;
     Tile *mCurrentTile;
@@ -168,9 +181,7 @@ private:
     QToolButton *mTilesetMenuButton;
     QMenu *mTilesetMenu; //opens on click of mTilesetMenu
     QActionGroup *mTilesetActionGroup;
-    QSignalMapper *mTilesetMenuMapper; //needed due to dynamic content
 
-    Zoomable *mZoomable;
     QComboBox *mZoomComboBox;
 
     bool mEmittingStampCaptured;
@@ -179,5 +190,3 @@ private:
 
 } // namespace Internal
 } // namespace Tiled
-
-#endif // TILESETDOCK_H

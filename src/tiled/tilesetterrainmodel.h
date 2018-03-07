@@ -18,8 +18,7 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef TILED_TILESETTERRAINMODEL_H
-#define TILED_TILESETTERRAINMODEL_H
+#pragma once
 
 #include <QAbstractItemModel>
 
@@ -92,6 +91,7 @@ public:
 
     void insertTerrain(int index, Terrain *terrain);
     Terrain *takeTerrainAt(int index);
+    void swapTerrains(int index, int swapIndex);
     void setTerrainName(int index, const QString &name);
     void setTerrainImage(int index, int tileId);
 
@@ -100,6 +100,8 @@ signals:
     void terrainAdded(Tileset *tileset, int terrainId);
     void terrainAboutToBeRemoved(Terrain *terrain);
     void terrainRemoved(Terrain *terrain);
+    void terrainAboutToBeSwapped(Tileset *tileset, int terrainId, int swapTerrainId);
+    void terrainSwapped(Tileset *tileset);
 
     /**
      * Emitted when either the name or the image of a terrain changed.
@@ -114,5 +116,3 @@ private:
 
 } // namespace Internal
 } // namespace Tiled
-
-#endif // TILED_TILESETTERRAINMODEL_H

@@ -28,8 +28,7 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef OBJECTGROUP_H
-#define OBJECTGROUP_H
+#pragma once
 
 #include "tiled_global.h"
 
@@ -61,20 +60,10 @@ public:
         IndexOrder
     };
 
-    /**
-     * Default constructor.
-     */
     ObjectGroup();
+    ObjectGroup(const QString &name, int x, int y);
 
-    /**
-     * Constructor with some parameters.
-     */
-    ObjectGroup(const QString &name, int x, int y, int width, int height);
-
-    /**
-     * Destructor.
-     */
-    ~ObjectGroup();
+    ~ObjectGroup() override;
 
     /**
      * Returns a pointer to the list of objects in this object group.
@@ -177,7 +166,7 @@ public:
     DrawOrder drawOrder() const;
     void setDrawOrder(DrawOrder drawOrder);
 
-    Layer *clone() const override;
+    ObjectGroup *clone() const override;
 
     void resetObjectIds();
     int highestObjectId() const;
@@ -248,5 +237,3 @@ TILEDSHARED_EXPORT ObjectGroup::DrawOrder drawOrderFromString(const QString &);
 } // namespace Tiled
 
 Q_DECLARE_METATYPE(Tiled::ObjectGroup*)
-
-#endif // OBJECTGROUP_H

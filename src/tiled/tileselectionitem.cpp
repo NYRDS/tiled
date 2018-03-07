@@ -20,6 +20,7 @@
 
 #include "tileselectionitem.h"
 
+#include "grouplayer.h"
 #include "map.h"
 #include "mapdocument.h"
 #include "maprenderer.h"
@@ -32,17 +33,19 @@
 using namespace Tiled;
 using namespace Tiled::Internal;
 
-TileSelectionItem::TileSelectionItem(MapDocument *mapDocument)
-    : mMapDocument(mapDocument)
+TileSelectionItem::TileSelectionItem(MapDocument *mapDocument,
+                                     QGraphicsItem *parent)
+    : QGraphicsObject(parent)
+    , mMapDocument(mapDocument)
 {
     setFlag(QGraphicsItem::ItemUsesExtendedStyleOption);
 
-    connect(mMapDocument, &MapDocument::selectedAreaChanged,
+    connect(mapDocument, &MapDocument::selectedAreaChanged,
             this, &TileSelectionItem::selectionChanged);
     connect(mapDocument, &MapDocument::layerChanged,
             this, &TileSelectionItem::layerChanged);
-    connect(mMapDocument, &MapDocument::currentLayerIndexChanged,
-            this, &TileSelectionItem::currentLayerIndexChanged);
+    connect(mapDocument, &MapDocument::currentLayerChanged,
+            this, &TileSelectionItem::currentLayerChanged);
 
     updateBoundingRect();
 }
@@ -76,17 +79,17 @@ void TileSelectionItem::selectionChanged(const QRegion &newSelection,
     update(mMapDocument->renderer()->boundingRect(changedArea));
 }
 
-void TileSelectionItem::layerChanged(int index)
+void TileSelectionItem::layerChanged(Layer *layer)
 {
-    const Layer *layer = mMapDocument->map()->layerAt(index);
-    if (layer == mMapDocument->currentLayer())
-        setPos(layer->offset());
+    if (auto currentLayer = mMapDocument->currentLayer())
+        if (currentLayer->isParentOrSelf(layer))
+            setPos(currentLayer->totalOffset());
 }
 
-void TileSelectionItem::currentLayerIndexChanged()
+void TileSelectionItem::currentLayerChanged(Layer *layer)
 {
-    if (Layer *layer = mMapDocument->currentLayer())
-        setPos(layer->offset());
+    if (layer)
+        setPos(layer->totalOffset());
 }
 
 void TileSelectionItem::updateBoundingRect()

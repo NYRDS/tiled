@@ -37,8 +37,9 @@ Tile::Tile(int id, Tileset *tileset):
     Object(TileType),
     mId(id),
     mTileset(tileset),
+    mImageStatus(LoadingReady),
     mTerrain(-1),
-    mProbability(1.f),
+    mProbability(1.0),
     mObjectGroup(nullptr),
     mCurrentFrameIndex(0),
     mUnusedTime(0)
@@ -49,8 +50,9 @@ Tile::Tile(const QPixmap &image, int id, Tileset *tileset):
     mId(id),
     mTileset(tileset),
     mImage(image),
+    mImageStatus(image.isNull() ? LoadingError : LoadingReady),
     mTerrain(-1),
-    mProbability(1.f),
+    mProbability(1.0),
     mObjectGroup(nullptr),
     mCurrentFrameIndex(0),
     mUnusedTime(0)
@@ -200,13 +202,14 @@ bool Tile::advanceAnimation(int ms)
 Tile *Tile::clone(Tileset *tileset) const
 {
     Tile *c = new Tile(mImage, mId, tileset);
+    c->setProperties(properties());
 
     c->mImageSource = mImageSource;
     c->mTerrain = mTerrain;
     c->mProbability = mProbability;
 
     if (mObjectGroup)
-        c->mObjectGroup = static_cast<ObjectGroup*>(mObjectGroup->clone());
+        c->mObjectGroup = mObjectGroup->clone();
 
     c->mFrames = mFrames;
     c->mCurrentFrameIndex = mCurrentFrameIndex;

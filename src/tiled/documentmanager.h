@@ -19,8 +19,7 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef DOCUMENT_MANAGER_H
-#define DOCUMENT_MANAGER_H
+#pragma once
 
 #include "document.h"
 #include "tileset.h"
@@ -39,6 +38,7 @@ class QTabBar;
 namespace Tiled {
 
 class FileSystemWatcher;
+class ObjectTemplate;
 
 namespace Internal {
 
@@ -53,6 +53,7 @@ class MapEditor;
 class MapScene;
 class MapView;
 class TilesetDocument;
+class TilesetDocumentsModel;
 
 /**
  * This class controls the open documents.
@@ -74,6 +75,7 @@ public:
     void setEditor(Document::DocumentType documentType, Editor *editor);
     Editor *editor(Document::DocumentType documentType) const;
     void deleteEditor(Document::DocumentType documentType);
+    QList<Editor*> editors() const;
 
     Editor *currentEditor() const;
 
@@ -125,11 +127,24 @@ public:
     bool isDocumentModified(Document *document) const;
     bool isDocumentChangedOnDisk(Document *document) const;
 
+    bool saveDocument(Document *document, const QString &fileName);
+    bool saveDocumentAs(Document *document);
+
     /**
      * Closes the current map document. Will not ask the user whether to save
      * any changes!
      */
     void closeCurrentDocument();
+
+    /**
+     * Closes all documents except the one pointed to by index.
+     */
+    void closeOtherDocuments(int index);
+
+    /**
+     * Closes all documents whose tabs are to the right of the index.
+     */
+    void closeDocumentsToRight(int index);
 
     /**
      * Closes the document at the given \a index. Will not ask the user whether
@@ -166,11 +181,10 @@ public:
      */
     const QList<Document*> &documents() const { return mDocuments; }
 
-    const QList<TilesetDocument*> &tilesetDocuments() const;
+    TilesetDocumentsModel *tilesetDocumentsModel() const;
 
     TilesetDocument *findTilesetDocument(const SharedTileset &tileset) const;
     TilesetDocument *findTilesetDocument(const QString &fileName) const;
-    TilesetDocument *findOrCreateTilesetDocument(const SharedTileset &tileset);
 
     /**
      * Opens the document for the given \a tileset.
@@ -180,14 +194,22 @@ public:
     /**
      * Centers the current map on the tile coordinates \a x, \a y.
      */
-    void centerViewOn(qreal x, qreal y);
-    void centerViewOn(const QPointF &pos)
-    { centerViewOn(pos.x(), pos.y()); }
+    void centerMapViewOn(qreal x, qreal y);
+    void centerMapViewOn(const QPointF &pos)
+    { centerMapViewOn(pos.x(), pos.y()); }
+
+    /**
+     * Unsets a flag to stop closeOtherDocuments() and closeDocumentsToRight()
+     * when Cancel is pressed
+     */
+    void abortMultiDocumentClose();
 
 signals:
     void fileOpenRequested();
     void fileOpenRequested(const QString &path);
     void fileSaveRequested();
+    void templateOpenRequested(const QString &path);
+    void templateTilesetReplaced();
 
     /**
      * Emitted when the current displayed map document changed.
@@ -250,8 +272,10 @@ private:
     void addToTilesetDocument(const SharedTileset &tileset, MapDocument *mapDocument);
     void removeFromTilesetDocument(const SharedTileset &tileset, MapDocument *mapDocument);
 
+    bool eventFilter(QObject *object, QEvent *event) override;
+
     QList<Document*> mDocuments;
-    QList<TilesetDocument*> mTilesetDocuments;
+    TilesetDocumentsModel *mTilesetDocumentsModel;
 
     QWidget *mWidget;
     QWidget *mNoEditorWidget;
@@ -271,17 +295,14 @@ private:
     QMap<SharedTileset, TilesetDocument*> mTilesetToDocument;
 
     static DocumentManager *mInstance;
+
+    bool mMultiDocumentClose;
 };
 
-/**
- * Returns all open tileset documents, either embedded or external.
- */
-inline const QList<TilesetDocument *> &DocumentManager::tilesetDocuments() const
+inline TilesetDocumentsModel *DocumentManager::tilesetDocumentsModel() const
 {
-    return mTilesetDocuments;
+    return mTilesetDocumentsModel;
 }
 
 } // namespace Tiled::Internal
 } // namespace Tiled
-
-#endif // DOCUMENT_MANAGER_H

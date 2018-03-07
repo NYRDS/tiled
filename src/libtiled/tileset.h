@@ -27,19 +27,19 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TILESET_H
-#define TILESET_H
+#pragma once
 
 #include "imagereference.h"
 #include "object.h"
 
 #include <QColor>
 #include <QList>
-#include <QVector>
+#include <QPixmap>
 #include <QPoint>
+#include <QPointer>
 #include <QSharedPointer>
 #include <QString>
-#include <QPixmap>
+#include <QVector>
 
 class QImage;
 
@@ -47,7 +47,9 @@ namespace Tiled {
 
 class Tile;
 class Tileset;
+class TilesetFormat;
 class Terrain;
+class WangSet;
 
 typedef QSharedPointer<Tileset> SharedTileset;
 
@@ -63,6 +65,16 @@ class TILEDSHARED_EXPORT Tileset : public Object
 {
 public:
     /**
+     * The orientation of the tileset determines the projection used in the
+     * TileCollisionDock and for the terrain information overlay of the
+     * TilesetView.
+     */
+    enum Orientation {
+        Orthogonal,
+        Isometric,
+    };
+
+    /**
      * Creates a new tileset with the given parameters. Using this function
      * makes sure the internal weak pointer is initialized, which enables the
      * sharedPointer() function.
@@ -77,13 +89,7 @@ public:
                                 int tileWidth,
                                 int tileHeight,
                                 int tileSpacing = 0,
-                                int margin = 0)
-    {
-        SharedTileset tileset(new Tileset(name, tileWidth, tileHeight,
-                                          tileSpacing, margin));
-        tileset->mWeakPointer = tileset;
-        return tileset;
-    }
+                                int margin = 0);
 
 private:
     /**
@@ -102,6 +108,9 @@ public:
     void setFileName(const QString &fileName);
     bool isExternal() const;
 
+    void setFormat(TilesetFormat *format);
+    TilesetFormat *format() const;
+
     int tileWidth() const;
     int tileHeight() const;
 
@@ -116,6 +125,12 @@ public:
 
     QPoint tileOffset() const;
     void setTileOffset(QPoint offset);
+
+    Orientation orientation() const;
+    void setOrientation(Orientation orientation);
+
+    QSize gridSize() const;
+    void setGridSize(QSize gridSize);
 
     const QMap<int, Tile*> &tiles() const;
     inline Tile *findTile(int id) const;
@@ -141,14 +156,15 @@ public:
 
     void setImageReference(const ImageReference &reference);
 
-    bool loadFromImage(const QImage &image, const QString &fileName);
+    bool loadFromImage(const QImage &image, const QUrl &source);
+    bool loadFromImage(const QImage &image, const QString &source);
     bool loadFromImage(const QString &fileName);
     bool loadImage();
 
     SharedTileset findSimilarTileset(const QVector<SharedTileset> &tilesets) const;
 
-    const QString &imageSource() const;
-    void setImageSource(const QString &imageSource);
+    const QUrl &imageSource() const;
+    void setImageSource(const QUrl &imageSource);
     bool isCollection() const;
 
     int columnCountForWidth(int width) const;
@@ -161,10 +177,20 @@ public:
     Terrain *addTerrain(const QString &name, int imageTileId);
     void insertTerrain(int index, Terrain *terrain);
     Terrain *takeTerrainAt(int index);
+    void swapTerrains(int index, int swapIndex);
 
     int terrainTransitionPenalty(int terrainType0, int terrainType1) const;
+    int maximumTerrainDistance() const;
 
-    Tile *addTile(const QPixmap &image, const QString &source = QString());
+    const QList<WangSet*> &wangSets() const;
+    int wangSetCount() const;
+    WangSet *wangSet(int index) const;
+
+    void addWangSet(WangSet *wangSet);
+    void insertWangSet(int index, WangSet *wangSet);
+    WangSet *takeWangSetAt(int index);
+
+    Tile *addTile(const QPixmap &image, const QUrl &source = QUrl());
     void addTiles(const QList<Tile*> &tiles);
     void removeTiles(const QList<Tile *> &tiles);
     void deleteTile(int id);
@@ -175,19 +201,37 @@ public:
 
     void setTileImage(Tile *tile,
                       const QPixmap &image,
-                      const QString &source = QString());
+                      const QUrl &source = QUrl());
 
     void markTerrainDistancesDirty();
 
     SharedTileset sharedPointer() const;
 
-    void setLoaded(bool loaded);
-    bool loaded() const;
-    bool imageLoaded() const;
+    void setStatus(LoadingStatus status);
+    void setImageStatus(LoadingStatus status);
+    LoadingStatus status() const;
+    LoadingStatus imageStatus() const;
 
     void swap(Tileset &other);
 
     SharedTileset clone() const;
+
+    /**
+     * Helper function that converts the tileset orientation to a string value.
+     * Useful for map writers.
+     *
+     * @return The tileset orientation as a lowercase string.
+     */
+    static QString orientationToString(Orientation);
+
+    /**
+     * Helper function that converts a string to a tileset orientation enumerator.
+     * Useful for map readers.
+     *
+     * @return The tileset orientation matching the given string, or
+     *         Tileset::Orthogonal if the string is unrecognized.
+     */
+    static Orientation orientationFromString(const QString &);
 
 private:
     void updateTileSize();
@@ -201,15 +245,20 @@ private:
     int mTileSpacing;
     int mMargin;
     QPoint mTileOffset;
+    Orientation mOrientation;
+    QSize mGridSize;
     int mColumnCount;
     int mExpectedColumnCount;
     int mExpectedRowCount;
-    QMap<int, Tile*> mTiles;
     int mNextTileId;
+    int mMaximumTerrainDistance;
+    QMap<int, Tile*> mTiles;
     QList<Terrain*> mTerrainTypes;
+    QList<WangSet*> mWangSets;
     bool mTerrainDistancesDirty;
-    bool mLoaded;
+    LoadingStatus mStatus;
     QColor mBackgroundColor;
+    QPointer<TilesetFormat> mFormat;
 
     QWeakPointer<Tileset> mWeakPointer;
 };
@@ -311,6 +360,39 @@ inline QPoint Tileset::tileOffset() const
 inline void Tileset::setTileOffset(QPoint offset)
 {
     mTileOffset = offset;
+}
+
+/**
+ * Returns the orientation of the tiles in this tileset.
+ */
+inline Tileset::Orientation Tileset::orientation() const
+{
+    return mOrientation;
+}
+
+/**
+ * @see orientation
+ */
+inline void Tileset::setOrientation(Orientation orientation)
+{
+    mOrientation = orientation;
+}
+
+/**
+ * Returns the grid size that is used when the tileset has Isometric
+ * orientation.
+ */
+inline QSize Tileset::gridSize() const
+{
+    return mGridSize;
+}
+
+/**
+ * @see gridSize
+ */
+inline void Tileset::setGridSize(QSize gridSize)
+{
+    mGridSize = gridSize;
 }
 
 /**
@@ -434,15 +516,15 @@ inline void Tileset::setBackgroundColor(QColor color)
  */
 inline bool Tileset::loadFromImage(const QString &fileName)
 {
-    return loadFromImage(QImage(fileName), fileName);
+    return loadFromImage(QImage(fileName), QUrl::fromLocalFile(fileName));
 }
 
 /**
- * Returns the file name of the external image that contains the tiles in
+ * Returns the URL of the external image that contains the tiles in
  * this tileset. Is an empty string when this tileset doesn't have a
  * tileset image.
  */
-inline const QString &Tileset::imageSource() const
+inline const QUrl &Tileset::imageSource() const
 {
     return mImageReference.source;
 }
@@ -478,6 +560,21 @@ inline int Tileset::terrainCount() const
 inline Terrain *Tileset::terrain(int index) const
 {
     return index >= 0 ? mTerrainTypes[index] : nullptr;
+}
+
+inline const QList<WangSet*> &Tileset::wangSets() const
+{
+    return mWangSets;
+}
+
+inline int Tileset::wangSetCount() const
+{
+    return mWangSets.size();
+}
+
+inline WangSet *Tileset::wangSet(int index) const
+{
+    return index >= 0 ? mWangSets[index] : nullptr;
 }
 
 /**
@@ -519,33 +616,41 @@ inline SharedTileset Tileset::sharedPointer() const
 }
 
 /**
- * Sets whether this tileset was loaded successfully. This variable is true by
- * default, but it can be set to false to indicate a failed attempt at loading
- * an external tileset.
+ * Sets the status of this tileset.
  */
-inline void Tileset::setLoaded(bool loaded)
+inline void Tileset::setStatus(LoadingStatus status)
 {
-    mLoaded = loaded;
+    mStatus = status;
 }
 
 /**
- * Returns whether this tileset was loaded succesfully. Only valid for
- * external tilesets (fileName() != empty).
+ * Sets the loading status of this tileset's image.
  */
-inline bool Tileset::loaded() const
+inline void Tileset::setImageStatus(LoadingStatus status)
 {
-    return mLoaded;
+    mImageReference.status = status;
 }
 
 /**
- * Returns whether the image used by this tileset was loaded succesfully. Only
- * valid for tilesets based on a single image (imageSource() != empty).
+ * Returns the loading status of this tileset.
+ *
+ * Only valid for external tilesets (fileName() != empty).
  */
-inline bool Tileset::imageLoaded() const
+inline LoadingStatus Tileset::status() const
 {
-    return mImageReference.loaded;
+    return mStatus;
+}
+
+/**
+ * Returns the loading status of this tileset's image.
+ *
+ * Only valid for tilesets based on a single image (imageSource() != empty).
+ */
+inline LoadingStatus Tileset::imageStatus() const
+{
+    return mImageReference.status;
 }
 
 } // namespace Tiled
 
-#endif // TILESET_H
+Q_DECLARE_METATYPE(Tiled::SharedTileset)

@@ -18,8 +18,7 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef AUTOMAPPER_H
-#define AUTOMAPPER_H
+#pragma once
 
 #include "tileset.h"
 
@@ -42,23 +41,26 @@ namespace Internal {
 
 class MapDocument;
 
-class InputIndexName
+struct InputLayer
 {
-public:
-    QVector<TileLayer*> listYes;
-    QVector<TileLayer*> listNo;
+    TileLayer *tileLayer;
+    bool strictEmpty;
 };
 
-class InputIndex : public QMap<QString, InputIndexName>
+class InputConditions
 {
 public:
-    QSet<QString> names;
+    QVector<InputLayer> listYes;    // "input"
+    QVector<InputLayer> listNo;     // "inputnot"
 };
 
+// Maps layer names to their conditions
+typedef QMap<QString, InputConditions> InputIndex;
+
+// Maps an index to a group of input layers
 class InputLayers : public QMap<QString, InputIndex>
 {
 public:
-    QSet<QString> indexes;
     QSet<QString> names; // all names
 };
 
@@ -85,18 +87,19 @@ public:
     /**
      * Constructs an AutoMapper.
      * All data structures, which only rely on the rules map are setup
-     * here. 
-     * 
+     * here.
+     *
      * @param workingDocument: the map to work on.
-     * @param rules: The rule map which should be used for automapping
+     * @param rules: The rule map which should be used for automapping. The
+     *               AutoMapper takes ownership of this map.
      * @param rulePath: The filepath to the rule map.
      */
-    AutoMapper(MapDocument *workingDocument, Map *rules, 
+    AutoMapper(MapDocument *workingDocument, Map *rules,
                const QString &rulePath);
     ~AutoMapper();
 
     /**
-     * Checks if the passed \a ruleLayerName is used in this instance 
+     * Checks if the passed \a ruleLayerName is used in this instance
      * of Automapper.
      */
     bool ruleLayerNameUsed(QString ruleLayerName) const;
@@ -146,6 +149,7 @@ private:
      * @return returns true when anything is ok, false when errors occurred.
      */
     bool setupRuleMapProperties();
+    void setupInputLayerProperties(InputLayer &inputLayer);
 
     void cleanUpRulesMap();
 
@@ -179,41 +183,40 @@ private:
     /**
      * sets up the tilesets which are used in automapping.
      * @return returns true when anything is ok, false when errors occurred.
-     *        (in that case will be a msg box anyway)
      */
-    bool setupTilesets(Map *src, Map *dst);
+    bool setupTilesets();
 
     /**
-     * Returns the conjunction of of all regions of all setlayers
+     * Returns the conjunction of all regions of all setlayers.
      */
-    const QRegion getSetLayersRegion();
+    QRegion computeSetLayersRegion() const;
 
     /**
      * This copies all Tiles from TileLayer src to TileLayer dst
      *
      * In src the Tiles are taken from the rectangle given by
-     * src_x, src_y, width and height.
+     * srcX, srcY, width and height.
      * In dst they get copied to a rectangle given by
-     * dst_x, dst_y, width, height .
+     * dstX, dstY, width, height .
      * if there is no tile in src TileLayer, there will nothing be copied,
      * so the maybe existing tile in dst will not be overwritten.
      *
      */
-    void copyTileRegion(TileLayer *src_lr, int src_x, int src_y,
-                        int width, int height, TileLayer *dst_lr,
-                        int dst_x, int dst_y);
+    void copyTileRegion(const TileLayer *srcLayer, int srcX, int srcY,
+                        int width, int height, TileLayer *dstLayer,
+                        int dstX, int dstY);
 
     /**
      * This copies all objects from the \a src_lr ObjectGroup to the \a dst_lr
      * in the given rectangle.
      *
-     * The rectangle is described by the upper left corner \a src_x \a src_y
-     * and its \a width and \a height. The parameter \a dst_x and \a dst_y
+     * The rectangle is described by the upper left corner \a srcX \a srcY
+     * and its \a width and \a height. The parameter \a dstX and \a dstY
      * offset the copied objects in the destination object group.
      */
-    void copyObjectRegion(ObjectGroup *src_lr, int src_x, int src_y,
-                          int width, int height, ObjectGroup *dst_lr,
-                          int dst_x, int dst_y);
+    void copyObjectRegion(const ObjectGroup *srcLayer, int srcX, int srcY,
+                          int width, int height, ObjectGroup *dstLayer,
+                          int dstX, int dstY);
 
 
     /**
@@ -224,7 +227,7 @@ private:
      * should get copied into which layers of the working map.
      */
     void copyMapRegion(const QRegion &region, QPoint Offset,
-                       const RuleOutput *LayerTranslation);
+                       const RuleOutput &LayerTranslation);
 
     /**
      * This goes through all the positions of the mMapWork and checks if
@@ -234,7 +237,7 @@ private:
      *              of mMapWork will be looked up in mRulesInput and mRulesOutput
      * @return where: an rectangle where the rule actually got applied
      */
-    QRect applyRule(const int ruleIndex, const QRect &where);
+    QRect applyRule(int ruleIndex, const QRect &where);
 
     /**
      * Cleans up the data structures filled by setupRuleMapLayers(),
@@ -279,9 +282,9 @@ private:
     QVector<SharedTileset> mAddedTilesets;
 
     /**
-     * description see: mAddedTilesets, just described by Strings
+     * description see: mAddedTilesets
      */
-    QList<QString> mAddedTileLayers;
+    QVector<Layer*> mAddedLayers;
 
     /**
      * Points to the tilelayer, which defines the input regions.
@@ -303,9 +306,9 @@ private:
      * List of Regions in mMapRules to know where the input rules are
      */
     QVector<QRegion> mRulesInput;
-    
+
     /**
-     * List of regions in mMapRules to know where the output of a 
+     * List of regions in mMapRules to know where the output of a
      * rule is.
      * mRulesOutput[i] is the output of that rule,
      * which has the input at mRulesInput[i], meaning that mRulesInput
@@ -326,7 +329,7 @@ private:
      * The list is used to hold different translation tables
      * => one of the tables is chosen by chance, so randomness is available
      */
-    QList<RuleOutput*> mLayerList;
+    QVector<RuleOutput> mLayerList;
 
     /**
      * store the name of the processed rules file, to have detailed
@@ -362,5 +365,3 @@ private:
 
 } // namespace Internal
 } // namespace Tiled
-
-#endif // AUTOMAPPER_H

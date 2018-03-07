@@ -18,8 +18,7 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef OBJECTSDOCK_H
-#define OBJECTSDOCK_H
+#pragma once
 
 #include <QDockWidget>
 #include <QTreeView>
@@ -91,16 +90,21 @@ public:
     MapObjectModel *mapObjectModel() const;
 
 protected:
+    bool event(QEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
     void selectionChanged(const QItemSelection &selected,
                           const QItemSelection &deselected) override;
 
 private slots:
-    void onPressed(const QModelIndex &proxyIndex);
     void onActivated(const QModelIndex &proxyIndex);
     void onSectionResized(int logicalIndex);
     void selectedObjectsChanged();
+    void setColumnVisibility(bool visible);
+
+    void showCustomHeaderContextMenu(const QPoint &point);
 
 private:
+    void restoreVisibleSections();
     void synchronizeSelectedItems();
 
     MapDocument *mMapDocument;
@@ -110,5 +114,3 @@ private:
 
 } // namespace Internal
 } // namespace Tiled
-
-#endif // OBJECTSDOCK_H

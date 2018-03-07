@@ -22,19 +22,23 @@
 
 #include "terrainbrush.h"
 
+#include "addremovetileset.h"
 #include "brushitem.h"
+#include "containerhelpers.h"
 #include "geometry.h"
+#include "map.h"
 #include "mapdocument.h"
 #include "mapscene.h"
 #include "painttilelayer.h"
 #include "randompicker.h"
+#include "staggeredrenderer.h"
+#include "terrain.h"
+#include "tile.h"
 #include "tilelayer.h"
 #include "tileset.h"
-#include "tile.h"
-#include "terrain.h"
 
-#include <math.h>
 #include <QVector>
+
 #include <climits>
 
 using namespace Tiled;
@@ -45,11 +49,13 @@ TerrainBrush::TerrainBrush(QObject *parent)
                        QIcon(QLatin1String(
                                ":images/24x24/terrain-edit.png")),
                        QKeySequence(tr("T")),
+                       nullptr,
                        parent)
     , mTerrain(nullptr)
     , mPaintX(0), mPaintY(0)
     , mIsActive(false)
     , mBrushBehavior(Free)
+    , mMirrorDiagonally(false)
     , mLineReferenceX(0)
     , mLineReferenceY(0)
 {
@@ -134,6 +140,7 @@ void TerrainBrush::mouseReleased(QGraphicsSceneMouseEvent *event)
     case Paint:
         if (event->button() == Qt::LeftButton)
             mBrushBehavior = Free;
+        break;
     default:
         // do nothing?
         break;
@@ -148,6 +155,8 @@ void TerrainBrush::modifiersChanged(Qt::KeyboardModifiers modifiers)
                      mBrushBehavior == LineStartSet)) {
         mBrushBehavior = lineMode ? Line : Free;
     }
+
+    mMirrorDiagonally = modifiers & Qt::AltModifier;
 
     setBrushMode((modifiers & Qt::ControlModifier) ? PaintVertex : PaintTile);
     updateBrush(tilePosition());
@@ -195,10 +204,7 @@ void TerrainBrush::capture()
 
     // TODO: we need to know which corner the mouse is closest to...
 
-    const QPoint &position = tilePosition();
-
-    if (!tileLayer->contains(position))
-        return;
+    const QPoint position = tilePosition() - tileLayer->position();
 
     Terrain *terrain = nullptr;
 
@@ -221,15 +227,22 @@ void TerrainBrush::doPaint(bool mergeable)
     TileLayer *tileLayer = currentTileLayer();
     Q_ASSERT(tileLayer);
 
-    if (!tileLayer->bounds().intersects(stamp->bounds()))
+    if (!tileLayer->isUnlocked())
+        return;
+
+    if (!tileLayer->rect().intersects(stamp->bounds()) && !mapDocument()->map()->infinite())
         return;
 
     PaintTileLayer *paint = new PaintTileLayer(mapDocument(), tileLayer,
                                                stamp->x(), stamp->y(),
                                                stamp, brushItem()->tileRegion());
+
+    if (mTerrain && !contains(mapDocument()->map()->tilesets(), mTerrain->tileset()))
+        new AddTileset(mapDocument(), mTerrain->tileset()->sharedPointer(), paint);
+
     paint->setMergeable(mergeable);
     mapDocument()->undoStack()->push(paint);
-    mapDocument()->emitRegionEdited(brushItem()->tileRegion(), tileLayer);
+    emit mapDocument()->regionEdited(brushItem()->tileRegion(), tileLayer);
 }
 
 static Tile *findBestTile(const Tileset &tileset, unsigned terrain, unsigned considerationMask)
@@ -301,6 +314,37 @@ static unsigned short rightEdge(const Tile *tile)
     return ((t >> 8) & 0xFF00) | (t & 0xFF);
 }
 
+static bool contains(const QRect &bounds, QPoint point)
+{
+    return bounds.left() <= point.x() &&
+           bounds.top() <= point.y() &&
+           bounds.right() >= point.x() &&
+           bounds.bottom() >= point.y();
+}
+
+static bool checked(const TileLayer &tileLayer, QPoint point)
+{
+    return tileLayer.cellAt(point).checked();
+}
+
+namespace {
+
+struct ConsiderationPoint : public QPoint
+{
+    ConsiderationPoint()
+        : paintCorner(0)
+    {}
+
+    ConsiderationPoint(QPoint p, int paintCorner = 0)
+        : QPoint(p)
+        , paintCorner(paintCorner)
+    {}
+
+    int paintCorner;
+};
+
+} // anonymous namespace
+
 void TerrainBrush::updateBrush(QPoint cursorPos, const QVector<QPoint> *list)
 {
     mPaintX = cursorPos.x();
@@ -310,27 +354,21 @@ void TerrainBrush::updateBrush(QPoint cursorPos, const QVector<QPoint> *list)
     TileLayer *currentLayer = currentTileLayer();
     Q_ASSERT(currentLayer);
 
-    int layerWidth = currentLayer->width();
-    int layerHeight = currentLayer->height();
-    int numTiles = layerWidth * layerHeight;
+    const QPoint layerPosition = currentLayer->position();
     int paintCorner = 0;
+
+    cursorPos -= layerPosition;
 
     // if we are in vertex paint mode, the bottom right corner on the map will appear as an invalid tile offset...
     if (mBrushMode == PaintVertex) {
-        if (cursorPos.x() == layerWidth) {
+        if (cursorPos.x() == currentLayer->width()) {
             cursorPos.setX(cursorPos.x() - 1);
             paintCorner |= 1;
         }
-        if (cursorPos.y() == layerHeight) {
+        if (cursorPos.y() == currentLayer->height()) {
             cursorPos.setY(cursorPos.y() - 1);
             paintCorner |= 2;
         }
-    }
-
-    // if the cursor is outside of the map, bail out
-    if (!currentLayer->bounds().contains(cursorPos)) {
-        brushItem()->clear();
-        return;
     }
 
     Tileset *terrainTileset = nullptr;
@@ -340,41 +378,70 @@ void TerrainBrush::updateBrush(QPoint cursorPos, const QVector<QPoint> *list)
         terrainId = mTerrain->id();
     }
 
-    // allocate a buffer to build the terrain tilemap (TODO: this could be retained per layer to save regular allocation)
-    Tile **newTerrain = new Tile*[numTiles];
-
-    // allocate a buffer of flags for each tile that may be considered (TODO: this could be retained per layer to save regular allocation)
-    char *checked = new char[numTiles];
-    memset(checked, 0, numTiles);
+    // create the tile stamp
+    SharedTileLayer stamp = SharedTileLayer::create(QString(), 0, 0, 0, 0);
 
     // create a consideration list, and push the start points
-    QList<QPoint> transitionList;
-    int initialTiles = 0;
+    QVector<ConsiderationPoint> transitionList;
 
-    if (list) {
-        // if we were supplied a list of start points
-        foreach (const QPoint &p, *list) {
-            transitionList.append(p);
-            ++initialTiles;
-        }
+    if (list) { // if we were supplied a list of start points
+        transitionList.reserve(list->size());
+        for (QPoint p : *list)
+            transitionList.append(p - layerPosition);
     } else {
-        transitionList.append(cursorPos);
-        initialTiles = 1;
+        transitionList.append(ConsiderationPoint(cursorPos, paintCorner));
     }
 
-    QRect brushRect(cursorPos, cursorPos);
+    if (mMirrorDiagonally) {
+        const int w = mapDocument()->map()->width();
+        const int h = mapDocument()->map()->height();
+
+        for (int i = 0, e = transitionList.size(); i < e; ++i) {
+            const auto &p = transitionList.at(i);
+            transitionList.append(ConsiderationPoint(QPoint(w - p.x() - 1,
+                                                            h - p.y() - 1),
+                                                     p.paintCorner ^ 3));
+        }
+    }
+
+    // Determine the bounds of the affected area
+    QRect bounds;
+    for (ConsiderationPoint point : transitionList)
+        bounds |= QRect(point, point);
+    int margin = terrainTileset ? terrainTileset->maximumTerrainDistance() : 3;
+    bounds.adjust(-margin, -margin, margin, margin);
+
+    if (!mapDocument()->map()->infinite())
+        bounds = bounds.intersected(currentLayer->rect().translated(-layerPosition));
+
+    int initialTiles = transitionList.size();
+
+    auto staggeredRenderer = dynamic_cast<StaggeredRenderer*>(mapDocument()->renderer());
 
     // produce terrain with transitions using a simple, relative naive approach (considers each tile once, and doesn't allow re-consideration if selection was bad)
     while (!transitionList.isEmpty()) {
         // get the next point in the consideration list
-        QPoint p = transitionList.takeFirst();
-        int x = p.x(), y = p.y();
-        int i = y*layerWidth + x;
+        const ConsiderationPoint p = transitionList.takeFirst();
+        const int x = p.x();
+        const int y = p.y();
 
         // if we have already considered this point, skip to the next
         // TODO: we might want to allow re-consideration if prior tiles... but not for now, this would risk infinite loops
-        if (checked[i])
+        if (checked(*stamp, p))
             continue;
+
+        // to support isometric staggered, make edges into variables
+        QPoint upPoint(x, y - 1);
+        QPoint bottomPoint(x, y + 1);
+        QPoint leftPoint(x - 1, y);
+        QPoint rightPoint(x + 1, y);
+
+        if (staggeredRenderer) {
+            upPoint = staggeredRenderer->topRight(x, y);
+            bottomPoint = staggeredRenderer->bottomLeft(x, y);
+            leftPoint = staggeredRenderer->topLeft(x, y);
+            rightPoint = staggeredRenderer->bottomRight(x, y);
+        }
 
         const Tile *tile = currentLayer->cellAt(p).tile();
         const unsigned currentTerrain = ::terrain(tile);
@@ -408,10 +475,10 @@ void TerrainBrush::updateBrush(QPoint cursorPos, const QVector<QPoint> *list)
                     continue;
 
                 // calculate the corner mask
-                mask = 0xFF << (3 - paintCorner)*8;
+                mask = 0xFF << (3 - p.paintCorner)*8;
 
                 // mask in the selected terrain
-                preferredTerrain = (currentTerrain & ~mask) | (terrainId << (3 - paintCorner)*8);
+                preferredTerrain = (currentTerrain & ~mask) | (terrainId << (3 - p.paintCorner)*8);
             }
 
             --initialTiles;
@@ -429,20 +496,20 @@ void TerrainBrush::updateBrush(QPoint cursorPos, const QVector<QPoint> *list)
             mask = 0;
 
             // depending which connections have been set, we update the preferred terrain of the tile accordingly
-            if (y > 0 && checked[i - layerWidth]) {
-                preferredTerrain = (::terrain(newTerrain[i - layerWidth]) << 16) | (preferredTerrain & 0x0000FFFF);
+            if (contains(bounds, upPoint) && checked(*stamp, upPoint)) {
+                preferredTerrain = (::terrain(stamp->cellAt(upPoint).tile()) << 16) | (preferredTerrain & 0x0000FFFF);
                 mask |= 0xFFFF0000;
             }
-            if (y < layerHeight - 1 && checked[i + layerWidth]) {
-                preferredTerrain = (::terrain(newTerrain[i + layerWidth]) >> 16) | (preferredTerrain & 0xFFFF0000);
+            if (contains(bounds, bottomPoint) && checked(*stamp, bottomPoint)) {
+                preferredTerrain = (::terrain(stamp->cellAt(bottomPoint).tile()) >> 16) | (preferredTerrain & 0xFFFF0000);
                 mask |= 0x0000FFFF;
             }
-            if (x > 0 && checked[i - 1]) {
-                preferredTerrain = ((::terrain(newTerrain[i - 1]) << 8) & 0xFF00FF00) | (preferredTerrain & 0x00FF00FF);
+            if (contains(bounds, leftPoint) && checked(*stamp, leftPoint)) {
+                preferredTerrain = ((::terrain(stamp->cellAt(leftPoint).tile()) << 8) & 0xFF00FF00) | (preferredTerrain & 0x00FF00FF);
                 mask |= 0xFF00FF00;
             }
-            if (x < layerWidth - 1 && checked[i + 1]) {
-                preferredTerrain = ((::terrain(newTerrain[i + 1]) >> 8) & 0x00FF00FF) | (preferredTerrain & 0xFF00FF00);
+            if (contains(bounds, rightPoint) && checked(*stamp, rightPoint)) {
+                preferredTerrain = ((::terrain(stamp->cellAt(rightPoint).tile()) >> 8) & 0x00FF00FF) | (preferredTerrain & 0xFF00FF00);
                 mask |= 0x00FF00FF;
             }
         }
@@ -457,75 +524,40 @@ void TerrainBrush::updateBrush(QPoint cursorPos, const QVector<QPoint> *list)
         }
 
         // add tile to the brush
-        newTerrain[i] = paste;
-        checked[i] = true;
-
-        // expand the brush rect to fit the edit set
-        brushRect |= QRect(p, p);
+        Cell cell(paste);
+        cell.setChecked(true);
+        stamp->setCell(x, y, cell);
 
         // consider surrounding tiles if terrain constraints were not satisfied
-        if (y > 0 && !checked[i - layerWidth]) {
-            const Tile *above = currentLayer->cellAt(x, y - 1).tile();
+        if (contains(bounds, upPoint) && !checked(*stamp, upPoint)) {
+            const Tile *above = currentLayer->cellAt(upPoint).tile();
             if (topEdge(paste) != bottomEdge(above))
-                transitionList.append(QPoint(x, y - 1));
+                transitionList.append(upPoint);
         }
-        if (y < layerHeight - 1 && !checked[i + layerWidth]) {
-            const Tile *below = currentLayer->cellAt(x, y + 1).tile();
+        if (contains(bounds, bottomPoint) && !checked(*stamp, bottomPoint)) {
+            const Tile *below = currentLayer->cellAt(bottomPoint).tile();
             if (bottomEdge(paste) != topEdge(below))
-                transitionList.append(QPoint(x, y + 1));
+                transitionList.append(bottomPoint);
         }
-        if (x > 0 && !checked[i - 1]) {
-            const Tile *left = currentLayer->cellAt(x - 1, y).tile();
+        if (contains(bounds, leftPoint) && !checked(*stamp, leftPoint)) {
+            const Tile *left = currentLayer->cellAt(leftPoint).tile();
             if (leftEdge(paste) != rightEdge(left))
-                transitionList.append(QPoint(x - 1, y));
+                transitionList.append(leftPoint);
         }
-        if (x < layerWidth - 1 && !checked[i + 1]) {
-            const Tile *right = currentLayer->cellAt(x + 1, y).tile();
+        if (contains(bounds, rightPoint) && !checked(*stamp, rightPoint)) {
+            const Tile *right = currentLayer->cellAt(rightPoint).tile();
             if (rightEdge(paste) != leftEdge(right))
-                transitionList.append(QPoint(x + 1, y));
+                transitionList.append(rightPoint);
         }
     }
 
-    // create a stamp for the terrain block
-    QRegion brushRegion;
-    SharedTileLayer stamp = SharedTileLayer(new TileLayer(QString(),
-                                                          brushRect.left(),
-                                                          brushRect.top(),
-                                                          brushRect.width(),
-                                                          brushRect.height()));
-
-    for (int y = brushRect.top(); y <= brushRect.bottom(); ++y) {
-        for (int x = brushRect.left(); x <= brushRect.right(); ++x) {
-            int i = y * layerWidth + x;
-            if (!checked[i])
-                continue;
-
-            stamp->setCell(x - brushRect.left(),
-                           y - brushRect.top(),
-                           Cell(newTerrain[i]));
-
-            // detect the affected region in ranges, which makes things faster
-            const int rangeStart = x;
-
-            for (++x; x <= brushRect.right() + 1; ++x) {
-                i = y * layerWidth + x;
-                if (x == brushRect.right() + 1 || !checked[i]) {
-                    const int rangeEnd = x;
-                    brushRegion += QRect(rangeStart, y,
-                                         rangeEnd - rangeStart, 1);
-                    break;
-                } else {
-                    stamp->setCell(x - brushRect.left(),
-                                   y - brushRect.top(),
-                                   Cell(newTerrain[i]));
-                }
-            }
-        }
-    }
+    // Translate to map coordinate space and normalize stamp
+    QRegion brushRegion = stamp->region([] (const Cell &cell) { return cell.checked(); });
+    brushRegion.translate(layerPosition);
+    QRect brushRect = brushRegion.boundingRect();
+    stamp->setPosition(brushRect.topLeft());
+    stamp->resize(brushRect.size(), -brushRect.topLeft());
 
     // set the new tile layer as the brush
     brushItem()->setTileLayer(stamp, brushRegion);
-
-    delete[] checked;
-    delete[] newTerrain;
 }

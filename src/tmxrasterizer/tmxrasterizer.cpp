@@ -57,18 +57,18 @@ TmxRasterizer::~TmxRasterizer()
 {
 }
 
-bool TmxRasterizer::shouldDrawLayer(Layer *layer)
+bool TmxRasterizer::shouldDrawLayer(const Layer *layer)
 {
-    if (layer->isObjectGroup())
+    if (layer->isObjectGroup() || layer->isGroupLayer())
         return false;
 
-    if (mLayersToHide.contains(layer->name(), Qt::CaseInsensitive)) 
+    if (mLayersToHide.contains(layer->name(), Qt::CaseInsensitive))
         return false;
 
-    if (mIgnoreVisibility) 
+    if (mIgnoreVisibility)
         return true;
 
-    return layer->isVisible();
+    return !layer->isHidden();
 }
 
 int TmxRasterizer::render(const QString &mapFileName,
@@ -79,8 +79,9 @@ int TmxRasterizer::render(const QString &mapFileName,
     MapReader reader;
     map = reader.readMap(mapFileName);
     if (!map) {
-        qWarning().nospace() << "Error while reading " << mapFileName << ":\n"
-                             << qPrintable(reader.errorString());
+        qWarning("Error while reading \"%s\":\n%s",
+                 qUtf8Printable(mapFileName),
+                 qUtf8Printable(reader.errorString()));
         return 1;
     }
 
@@ -100,7 +101,9 @@ int TmxRasterizer::render(const QString &mapFileName,
         break;
     }
 
-    QSize mapSize = renderer->mapSize();
+    QRect mapBoundingRect = renderer->mapBoundingRect();
+    QSize mapSize = mapBoundingRect.size();
+    QPoint mapOffset = mapBoundingRect.topLeft();
     qreal xScale, yScale;
 
     if (mSize > 0) {
@@ -130,14 +133,18 @@ int TmxRasterizer::render(const QString &mapFileName,
     painter.setTransform(QTransform::fromScale(xScale, yScale));
 
     painter.translate(margins.left(), margins.top());
+    painter.translate(-mapOffset);
 
     // Perform a similar rendering than found in exportasimagedialog.cpp
-    for (Layer *layer : map->layers()) {
-        if (!shouldDrawLayer(layer)) 
+    LayerIterator iterator(map);
+    while (const Layer *layer = iterator.next()) {
+        if (!shouldDrawLayer(layer))
             continue;
 
-        painter.setOpacity(layer->opacity());
-        painter.translate(layer->offset());
+        const auto offset = layer->totalOffset();
+
+        painter.setOpacity(layer->effectiveOpacity());
+        painter.translate(offset);
 
         const TileLayer *tileLayer = dynamic_cast<const TileLayer*>(layer);
         const ImageLayer *imageLayer = dynamic_cast<const ImageLayer*>(layer);
@@ -148,7 +155,7 @@ int TmxRasterizer::render(const QString &mapFileName,
             renderer->drawImageLayer(&painter, imageLayer);
         }
 
-        painter.translate(-layer->offset());
+        painter.translate(-offset);
     }
 
     delete renderer;
@@ -161,8 +168,9 @@ int TmxRasterizer::render(const QString &mapFileName,
         imageWriter.setFormat("png");
 
     if (!imageWriter.write(image)) {
-        qWarning().nospace() << "Error while writing " << imageFileName << ": "
-                             << qPrintable(imageWriter.errorString());
+        qWarning("Error while writing \"%s\": %s",
+                 qUtf8Printable(imageFileName),
+                 qUtf8Printable(imageWriter.errorString()));
         return 1;
     }
 

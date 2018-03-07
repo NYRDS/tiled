@@ -18,8 +18,7 @@
  * this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef CREATEOBJECTTOOL_H
-#define CREATEOBJECTTOOL_H
+#pragma once
 
 #include "abstractobjecttool.h"
 
@@ -37,13 +36,8 @@ class CreateObjectTool : public AbstractObjectTool
     Q_OBJECT
 
 public:
-    enum CreationMode {
-        CreateTile,
-        CreateGeometry
-    };
-
-    CreateObjectTool(CreationMode mode, QObject *parent = nullptr);
-    ~CreateObjectTool();
+    CreateObjectTool(QObject *parent = nullptr);
+    ~CreateObjectTool() override;
 
     void activate(MapScene *scene) override;
     void deactivate(MapScene *scene) override;
@@ -55,13 +49,6 @@ public:
     void mousePressed(QGraphicsSceneMouseEvent *event) override;
     void mouseReleased(QGraphicsSceneMouseEvent *event) override;
 
-public slots:
-    /**
-     * Sets the tile that will be used when the creation mode is
-     * CreateTileObjects.
-     */
-    void setTile(Tile *tile) { mTile = tile; }
-
 protected:
     virtual void mouseMovedWhileCreatingObject(const QPointF &pos,
                                                Qt::KeyboardModifiers modifiers);
@@ -69,21 +56,16 @@ protected:
     virtual void mouseReleasedWhileCreatingObject(QGraphicsSceneMouseEvent *event);
 
 
-    virtual void startNewMapObject(const QPointF &pos, ObjectGroup *objectGroup);
+    virtual bool startNewMapObject(const QPointF &pos, ObjectGroup *objectGroup);
     virtual MapObject *createNewMapObject() = 0;
     virtual void cancelNewMapObject();
     virtual void finishNewMapObject();
+    virtual MapObject *clearNewMapObjectItem();
 
-    MapObject *clearNewMapObjectItem();
     ObjectGroup *mNewMapObjectGroup;
     ObjectGroupItem *mObjectGroupItem;
     MapObjectItem *mNewMapObjectItem;
-    MapObjectItem *mOverlayPolygonItem;
-    Tile *mTile;
-    CreationMode mMode;
 };
 
 } // namespace Internal
 } // namespace Tiled
-
-#endif // CREATEOBJECTTOOL_H
