@@ -116,6 +116,11 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
                 for(int j=0;j<layer->map()->height();++j){
                     int tileId = layer->asTileLayer()->cellAt(i,j).tileId();
 
+                    if(tileId<0) {
+                        mError = tr("Hole in logic layer at (%1, %2)").arg(i).arg(j);
+                        return false;
+                    }
+
                     switch (tileId) {
                     case TileId::ENTRANCE:
                         entrance.append(i);
