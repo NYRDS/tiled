@@ -74,7 +74,10 @@ bool RpdMapFormat::insertTilesetFile(Tiled::Layer &layer, const QString &tiles_n
     }
 
     if(tilesets.size()>1) {
-        QString msg = QString("Only one tileset per layer supported (")+layer.name()+" layer)";
+        QString msg = QString("Only one tileset per layer supported (")+layer.name()+" layer) ->\n";
+        for(auto tileset: tilesets) {
+            msg += "[" + tileset->name() + "]\n";
+        }
         mError = tr(msg.toUtf8());
         return false;
     }
@@ -98,6 +101,11 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
     QJsonObject mapJson;
 
     for(Tiled::Layer *layer: map->layers()) {
+
+        if(!insertTilesetFile(*layer,QString("tiles_")+layer->name(),mapJson)) {
+            return false;
+        }
+
         if(layer->name()=="logic") {
 
             QJsonArray entrance;
@@ -107,10 +115,6 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
             mapJson.insert("height",layer->map()->height());
 
             mapJson.insert("map",packMapData(layer));
-
-            if(!insertTilesetFile(*layer,"tiles_logic",mapJson)) {
-                return false;
-            }
 
             for(int i=0;i<layer->map()->width();++i){
                 for(int j=0;j<layer->map()->height();++j){
