@@ -100,6 +100,22 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
 
     QJsonObject mapJson;
 
+    for(const auto& property : map->properties().toStdMap()) {
+        QVariant value = property.second;
+        if(value.canConvert<double>()) {
+           mapJson.insert(property.first, value.toDouble());
+           continue;
+        }
+
+        if(value.canConvert<QString>()) {
+            mapJson.insert(property.first, value.toString());
+            continue;
+        }
+
+        mError = tr("Dont know what to do with property (%1)").arg(property.first);
+        return false;
+    }
+
     for(Tiled::Layer *layer: map->layers()) {
 
         if(!insertTilesetFile(*layer,QString("tiles_")+layer->name(),mapJson)) {
