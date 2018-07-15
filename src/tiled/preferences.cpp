@@ -82,6 +82,7 @@ Preferences::Preferences()
     mGridFine = intValue("GridFine", 4);
     mObjectLineWidth = realValue("ObjectLineWidth", 2);
     mHighlightCurrentLayer = boolValue("HighlightCurrentLayer");
+    mHighlightHoveredObject = boolValue("HighlightHoveredObject", true);
     mShowTilesetGrid = boolValue("ShowTilesetGrid", true);
     mLanguage = stringValue("Language");
     mUseOpenGL = boolValue("OpenGL");
@@ -337,6 +338,17 @@ void Preferences::setHighlightCurrentLayer(bool highlight)
     emit highlightCurrentLayerChanged(mHighlightCurrentLayer);
 }
 
+void Preferences::setHighlightHoveredObject(bool highlight)
+{
+    if (mHighlightHoveredObject == highlight)
+        return;
+
+    mHighlightHoveredObject = highlight;
+    mSettings->setValue(QLatin1String("Interface/HighlightHoveredObject"),
+                        mHighlightHoveredObject);
+    emit highlightHoveredObjectChanged(mHighlightHoveredObject);
+}
+
 void Preferences::setShowTilesetGrid(bool showTilesetGrid)
 {
     if (mShowTilesetGrid == showTilesetGrid)
@@ -470,8 +482,9 @@ static QString lastPathKey(Preferences::FileType fileType)
     case Preferences::ExternalTileset:
         key.append(QLatin1String("ExternalTileset"));
         break;
-    default:
-        Q_ASSERT(false); // Getting here means invalid file type
+    case Preferences::WorldFile:
+        key.append(QLatin1String("WorldFile"));
+        break;
     }
 
     return key;

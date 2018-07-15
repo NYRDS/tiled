@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
  Python Tiled Plugin
  Copyright 2012-2013, Samuli Tuomola <samuli@tuomola.net>
@@ -18,9 +19,39 @@
  this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
+from __future__ import print_function
+from functools import wraps
+from operator import attrgetter, itemgetter
 from pybindgen import *
+from collections import OrderedDict
+
+
+class SimpleSortedDict(OrderedDict):
+    "naive and ineffecient but adequate for this use"
+    def items(self):
+        return sorted([[k, self[k]] for k in self], key=itemgetter(0))
+
+
+def patch_a_prop(func, prop, value_factory):
+    """replace an object property after it's given method has executed
+    """
+    assert callable(value_factory)
+    def _decorate(obj, *args, **kwargs):
+        ret = func(obj, *args, **kwargs)
+        setattr(obj, prop, value_factory())
+        return ret
+
+    return wraps(func)(_decorate)
+
+
+# after a new pybindgen container is instantiated, replace it's methods dictionary
+Module.__init__ = patch_a_prop(Module.__init__, 'methods', lambda:SimpleSortedDict())
+CppClass.__init__ = patch_a_prop(CppClass.__init__, 'methods', lambda:SimpleSortedDict())
+
 
 mod = Module('tiled')
+mod.functions = SimpleSortedDict()
+
 mod.add_include('"pythonplugin.h"')
 mod.add_include('"map.h"')
 mod.add_include('"layer.h"')
@@ -31,7 +62,9 @@ mod.add_include('"tilelayer.h"')
 mod.add_include('"objectgroup.h"')
 mod.add_include('"tileset.h"')
 
+mod.header.writeln('#ifndef _MSC_VER')
 mod.header.writeln('#pragma GCC diagnostic ignored "-Wmissing-field-initializers"')
+mod.header.writeln('#endif')
 
 # one day PyQt/PySide could be considered
 import qtbinding
@@ -135,8 +168,17 @@ cls_map.add_method('isTilesetUsed', 'bool',
 cls_cell = tiled.add_class('Cell')
 cls_cell.add_constructor([param('Tiled::Tile*','tile',transfer_ownership=False)])
 cls_cell.add_copy_constructor()
+cls_cell.add_binary_comparison_operator('==')
+cls_cell.add_binary_comparison_operator('!=')
 cls_cell.add_method('isEmpty', 'bool', [])
+cls_cell.add_instance_attribute('flippedHorizontally', 'bool', getter='flippedHorizontally', setter='setFlippedHorizontally')
+cls_cell.add_instance_attribute('flippedVertically', 'bool', getter='flippedVertically', setter='setFlippedVertically')
+cls_cell.add_instance_attribute('flippedAntiDiagonally', 'bool', getter='flippedAntiDiagonally', setter='setFlippedAntiDiagonally')
+cls_cell.add_instance_attribute('rotatedHexagonal120', 'bool', getter='rotatedHexagonal120', setter='setRotatedHexagonal120')
+cls_cell.add_instance_attribute('checked', 'bool', getter='checked', setter='setChecked')
 cls_cell.add_method('tile', retval('Tiled::Tile*',reference_existing_object=True), [])
+cls_cell.add_method('tileset', retval('Tiled::Tileset*',reference_existing_object=True), [])
+cls_cell.add_method('setTile', None, [param('Tiled::Tile*','tile',transfer_ownership=False)])
 
 cls_tilelayer = tiled.add_class('TileLayer', cls_layer)
 cls_tilelayer.add_constructor([('QString','name'), ('int','x'), ('int','y'),
@@ -305,15 +347,15 @@ with open('pythonbind.cpp','w') as fh:
     import pybindgen.typehandlers.codesink as cs
     sink = cs.MemoryCodeSink()
 
-    print >>fh, """
+    print("""
 #ifdef __MINGW32__
 #include <cmath> // included before Python.h to fix ::hypot not declared issue
 #endif
-"""
+""", file=fh)
 
     mod.generate(fh)
 
-    print >>fh, """
+    print("""
 PyObject* _wrap_convert_c2py__Tiled__LoggingInterface(Tiled::LoggingInterface *cvalue)
 {
         PyObject *py_retval;
@@ -325,7 +367,7 @@ PyObject* _wrap_convert_c2py__Tiled__LoggingInterface(Tiled::LoggingInterface *c
         py_retval = Py_BuildValue((char *) "N", py_LoggingInterface);
         return py_retval;
 }
-"""
+""", file=fh)
     #mod.generate_c_to_python_type_converter(
     #  utils.eval_retval(retval("Tiled::LoggingInterface")),
     #  sink)
@@ -336,6 +378,6 @@ PyObject* _wrap_convert_c2py__Tiled__LoggingInterface(Tiled::LoggingInterface *c
         utils.eval_retval("const Tiled::Map"),
         sink)
 
-    print >>fh, sink.flush()
+    print(sink.flush(), file=fh)
 
 # vim: ai ts=4 sts=4 et sw=4 ft=python

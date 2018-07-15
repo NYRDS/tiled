@@ -36,7 +36,9 @@ AboutDialog::AboutDialog(QWidget *parent): QDialog(parent)
 {
     setupUi(this);
     logo->setMinimumWidth(Utils::dpiScaled(logo->minimumWidth()));
+#if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
     setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
+#endif
 
     connect(textBrowser->document()->documentLayout(), &QAbstractTextDocumentLayout::documentSizeChanged,
             this, [this](const QSizeF &size) {
@@ -58,7 +60,7 @@ AboutDialog::AboutDialog(QWidget *parent): QDialog(parent)
         if (style->isDark())
             logo->setPixmap(QPixmap(QString::fromUtf8(":/images/about-tiled-logo-white.png")));
 
-    connect(donateButton, SIGNAL(clicked()), SLOT(donate()));
+    connect(donateButton, &QAbstractButton::clicked, this, &AboutDialog::donate);
 }
 
 void AboutDialog::donate()

@@ -23,11 +23,12 @@
 #include "mapdocument.h"
 #include "map.h"
 #include "terrain.h"
-#include "wangset.h"
 #include "tile.h"
 #include "tilesetformat.h"
 #include "tilesetterrainmodel.h"
 #include "tilesetwangsetmodel.h"
+#include "wangcolormodel.h"
+#include "wangset.h"
 
 #include <QCoreApplication>
 #include <QFileInfo>
@@ -55,6 +56,8 @@ private:
 };
 
 
+QMap<SharedTileset, TilesetDocument*> TilesetDocument::sTilesetToDocument;
+
 TilesetDocument::TilesetDocument(const SharedTileset &tileset, const QString &fileName)
     : Document(TilesetDocumentType, fileName)
     , mTileset(tileset)
@@ -62,6 +65,9 @@ TilesetDocument::TilesetDocument(const SharedTileset &tileset, const QString &fi
     , mWangSetModel(new TilesetWangSetModel(this, this))
     , mWangColorModel(nullptr)
 {
+    Q_ASSERT(!sTilesetToDocument.contains(tileset));
+    sTilesetToDocument.insert(tileset, this);
+
     mCurrentObject = tileset.data();
 
     // warning: will need to be kept up-to-date
@@ -85,6 +91,7 @@ TilesetDocument::TilesetDocument(const SharedTileset &tileset, const QString &fi
 
 TilesetDocument::~TilesetDocument()
 {
+    sTilesetToDocument.remove(mTileset);
 }
 
 bool TilesetDocument::save(const QString &fileName, QString *error)
@@ -140,21 +147,21 @@ bool TilesetDocument::reload(QString *error)
     return true;
 }
 
-TilesetDocument *TilesetDocument::load(const QString &fileName,
-                                       TilesetFormat *format,
-                                       QString *error)
+TilesetDocumentPtr TilesetDocument::load(const QString &fileName,
+                                         TilesetFormat *format,
+                                         QString *error)
 {
     SharedTileset tileset = format->read(fileName);
 
     if (tileset.isNull()) {
         if (error)
             *error = format->errorString();
-        return nullptr;
+        return TilesetDocumentPtr();
     }
 
     tileset->setFormat(format);
 
-    return new TilesetDocument(tileset, fileName);
+    return TilesetDocumentPtr::create(tileset, fileName);
 }
 
 FileFormat *TilesetDocument::writerFormat() const
@@ -206,7 +213,10 @@ void TilesetDocument::swapTileset(SharedTileset &tileset)
     setSelectedTiles(QList<Tile*>());
     setCurrentObject(mTileset.data());
 
+    sTilesetToDocument.remove(mTileset);
     mTileset->swap(*tileset);
+    sTilesetToDocument.insert(mTileset, this);
+
     emit tilesetChanged(mTileset.data());
 }
 
@@ -291,6 +301,20 @@ QList<Object *> TilesetDocument::currentObjects() const
     return Document::currentObjects();
 }
 
+/**
+ * Returns the WangColorModel instance for the given \a wangSet.
+ * The model instances are created on-demand and owned by the document.
+ */
+WangColorModel *TilesetDocument::wangColorModel(WangSet *wangSet)
+{
+    Q_ASSERT(wangSet->tileset() == mTileset.data());
+
+    std::unique_ptr<WangColorModel> &model = mWangColorModels[wangSet];
+    if (!model)
+        model.reset(new WangColorModel(this, wangSet));
+    return model.get();
+}
+
 void TilesetDocument::setTileType(Tile *tile, const QString &type)
 {
     Q_ASSERT(tile->tileset() == mTileset.data());
@@ -312,6 +336,11 @@ void TilesetDocument::setTileImage(Tile *tile, const QPixmap &image, const QUrl 
 
     for (MapDocument *mapDocument : mapDocuments())
         emit mapDocument->tileImageSourceChanged(tile);
+}
+
+TilesetDocument *TilesetDocument::findDocumentForTileset(const SharedTileset &tileset)
+{
+    return sTilesetToDocument.value(tileset);
 }
 
 void TilesetDocument::onPropertyAdded(Object *object, const QString &name)
@@ -348,6 +377,8 @@ void TilesetDocument::onWangSetRemoved(WangSet *wangSet)
 {
     if (wangSet == mCurrentObject)
         setCurrentObject(nullptr);
+
+    mWangColorModels.erase(wangSet);
 }
 
 } // namespace Internal

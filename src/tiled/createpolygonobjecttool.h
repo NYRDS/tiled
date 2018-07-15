@@ -44,6 +44,7 @@ public:
     void mouseMoved(const QPointF &pos,
                     Qt::KeyboardModifiers modifiers) override;
     void mousePressed(QGraphicsSceneMouseEvent *event) override;
+    void mouseReleased(QGraphicsSceneMouseEvent *event) override;
 
     void languageChanged() override;
 
@@ -52,13 +53,14 @@ public:
 protected:
     void mouseMovedWhileCreatingObject(const QPointF &pos,
                                        Qt::KeyboardModifiers modifiers) override;
-    void mousePressedWhileCreatingObject(QGraphicsSceneMouseEvent *event) override;
+
+    void applySegment();
 
     bool startNewMapObject(const QPointF &pos, ObjectGroup *objectGroup) override;
     MapObject *createNewMapObject() override;
     void cancelNewMapObject() override;
     void finishNewMapObject() override;
-    MapObject *clearNewMapObjectItem() override;
+    std::unique_ptr<MapObject> clearNewMapObjectItem() override;
 
 private slots:
     void updateHover(const QPointF &scenePos, QGraphicsSceneMouseEvent *event = nullptr);
@@ -77,6 +79,8 @@ private:
         ExtendingAtEnd,
     };
 
+    void languageChangedImpl();
+
     void finishExtendingMapObject();
     void abortExtendingMapObject();
 
@@ -84,9 +88,9 @@ private:
 
     void setHoveredHandle(PointHandle *handle);
 
-    MapObject *mOverlayPolygonObject;
-    ObjectGroup *mOverlayObjectGroup;
-    MapObjectItem *mOverlayPolygonItem;
+    MapObject *mOverlayPolygonObject;   // owned by mOverlayObjectGroup
+    std::unique_ptr<ObjectGroup> mOverlayObjectGroup;
+    MapObjectItem *mOverlayPolygonItem; // owned by mObjectGroupItem if set
     QPointF mLastPixelPos;
     Mode mMode;
     bool mFinishAsPolygon;

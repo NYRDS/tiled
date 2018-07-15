@@ -1,6 +1,7 @@
 language: cpp
 sudo: required
 dist: trusty
+python: 3.6
 
 env:
   global:
@@ -51,16 +52,14 @@ matrix:
         - qbs setup-toolchains --detect
         - qbs setup-qt --detect
         - qbs config defaultProfile qt-5-10-1
-        - qbs install --install-root Tiled/usr release products.Tiled.version:$TILED_VERSION
+        - qbs install --install-root Tiled/usr config:release projects.Tiled.version:$TILED_VERSION
         - cp LICENSE* COPYING *md Tiled/
       after_success:
         - wget -c "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage" -O linuxdeployqt
         - chmod a+x linuxdeployqt
         - unset QTDIR; unset QT_PLUGIN_PATH; unset LD_LIBRARY_PATH
-        - mkdir -p Tiled/usr/plugins/imageformats
-        - cp /opt/qt510/plugins/imageformats/libqsvg.so Tiled/usr/plugins/imageformats/
-        - ./linuxdeployqt ./Tiled/usr/share/applications/org.mapeditor.Tiled.desktop -bundle-non-qt-libs -verbose=2
-        - ./linuxdeployqt ./Tiled/usr/share/applications/org.mapeditor.Tiled.desktop -appimage
+        - ./linuxdeployqt ./Tiled/usr/share/applications/org.mapeditor.Tiled.desktop -bundle-non-qt-libs -extra-plugins=imageformats/libqsvg.so -exclude-libs=libpython3.4m.so.1.0 -verbose=2
+        - ./linuxdeployqt ./Tiled/usr/share/applications/org.mapeditor.Tiled.desktop -exclude-libs=libpython3.4m.so.1.0 -appimage
         - find ./Tiled -executable -type f -exec ldd {} \; | grep " => /usr" | cut -d " " -f 2-3 | sort | uniq
         - mv Tiled-x86_64.AppImage Tiled-$TILED_VERSION-x86_64.AppImage
       deploy:
@@ -111,14 +110,15 @@ matrix:
       before_install:
         - brew update
         - brew install qbs
+        - brew install qt@5.5
       script:
         - qbs --version
         - qbs setup-toolchains --detect
-        - qbs setup-qt /usr/local/opt/qt/bin/qmake qt-brew
+        - qbs setup-qt /usr/local/opt/qt@5.5/bin/qmake qt-brew
         - qbs config profiles.qt-brew.baseProfile xcode-macosx-x86_64
         - qbs config defaultProfile qt-brew
-        - qbs install --install-root install release projects.Tiled.version:$TILED_VERSION
-        - /usr/local/opt/qt/bin/macdeployqt install/Tiled.app
+        - qbs install --install-root install config:release projects.Tiled.version:$TILED_VERSION
+        - /usr/local/opt/qt@5.5/bin/macdeployqt install/Tiled.app
       deploy:
         - provider: script
           skip_cleanup: true

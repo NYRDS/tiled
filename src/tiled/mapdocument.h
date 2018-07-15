@@ -32,6 +32,8 @@
 #include <QPointer>
 #include <QRegion>
 
+#include <memory>
+
 class QModelIndex;
 class QPoint;
 class QRect;
@@ -51,8 +53,11 @@ class WangSet;
 namespace Internal {
 
 class LayerModel;
+class MapDocument;
 class MapObjectModel;
 class TileSelectionModel;
+
+using MapDocumentPtr = QSharedPointer<MapDocument>;
 
 /**
  * Represents an editable map. The purpose of this class is to make sure that
@@ -83,15 +88,17 @@ public:
 
     ~MapDocument() override;
 
+    MapDocumentPtr sharedFromThis() { return qSharedPointerCast<MapDocument>(Document::sharedFromThis()); }
+
     bool save(const QString &fileName, QString *error = nullptr) override;
 
     /**
      * Loads a map and returns a MapDocument instance on success. Returns null
      * on error and sets the \a error message.
      */
-    static MapDocument *load(const QString &fileName,
-                             MapFormat *format,
-                             QString *error = nullptr);
+    static MapDocumentPtr load(const QString &fileName,
+                               MapFormat *format,
+                               QString *error = nullptr);
 
     MapFormat *readerFormat() const;
     void setReaderFormat(MapFormat *format);
@@ -108,7 +115,7 @@ public:
      * Returns the map instance. Be aware that directly modifying the map will
      * not allow the GUI to update itself appropriately.
      */
-    Map *map() const { return mMap; }
+    Map *map() const { return mMap.get(); }
 
     int layerIndex(const Layer *layer) const;
 
@@ -184,7 +191,7 @@ public:
     /**
      * Returns the map renderer.
      */
-    MapRenderer *renderer() const { return mRenderer; }
+    MapRenderer *renderer() const { return mRenderer.get(); }
 
     /**
      * Creates the map renderer. Should be called after changing the map
@@ -224,7 +231,13 @@ public:
     void unifyTilesets(Map *map);
     void unifyTilesets(Map *map, QVector<SharedTileset> &missingTilesets);
 
-    void emitEditLayerNameRequested();
+    bool allowHidingObjects() const { return mAllowHidingObjects; }
+    void setAllowHidingObjects(bool value) { mAllowHidingObjects = value; }
+
+    bool allowTileObjects() const { return mAllowTileObjects; }
+    void setAllowTileObjects(bool value) { mAllowTileObjects = value; }
+
+    bool templateAllowed(const ObjectTemplate *objectTemplate) const;
 
 signals:
     /**
@@ -244,6 +257,10 @@ signals:
      */
     void selectedObjectsChanged();
 
+    /**
+     * Emitted when the hovered object changes. Use \a previous with caution,
+     * because it may reference an object that was removed.
+     */
     void hoveredMapObjectChanged(MapObject *object, MapObject *previous);
 
     /**
@@ -331,9 +348,9 @@ private slots:
 public slots:
     void updateTemplateInstances(const ObjectTemplate *objectTemplate);
     void selectAllInstances(const ObjectTemplate *objectTemplate);
+    void deselectObjects(const QList<MapObject*> &objects);
 
 private:
-    void deselectObjects(const QList<MapObject*> &objects);
     void moveObjectIndex(const MapObject *object, int count);
 
     /*
@@ -343,15 +360,17 @@ private:
     QPointer<MapFormat> mReaderFormat;
     QPointer<MapFormat> mWriterFormat;
     QPointer<MapFormat> mExportFormat;
-    Map *mMap;
+    std::unique_ptr<Map> mMap;
     LayerModel *mLayerModel;
     QRegion mSelectedArea;
     QList<Layer*> mSelectedLayers;
     QList<MapObject*> mSelectedObjects;
     MapObject *mHoveredMapObject;       /**< Map object with mouse on top. */
-    MapRenderer *mRenderer;
-    Layer* mCurrentLayer;
+    std::unique_ptr<MapRenderer> mRenderer;
+    Layer *mCurrentLayer;
     MapObjectModel *mMapObjectModel;
+    bool mAllowHidingObjects = true;
+    bool mAllowTileObjects = true;
 };
 
 } // namespace Internal

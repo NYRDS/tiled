@@ -56,6 +56,7 @@ public:
     qreal objectLineWidth() const { return mObjectLineWidth; }
 
     bool highlightCurrentLayer() const { return mHighlightCurrentLayer; }
+    bool highlightHoveredObject() const;
     bool showTilesetGrid() const { return mShowTilesetGrid; }
 
     enum ObjectLabelVisiblity {
@@ -113,7 +114,8 @@ public:
         ObjectTemplateFile,
         ImageFile,
         ExportedFile,
-        ExternalTileset
+        ExternalTileset,
+        WorldFile
     };
 
     QString lastPath(FileType fileType) const;
@@ -171,6 +173,7 @@ public slots:
     void setGridFine(int gridFine);
     void setObjectLineWidth(qreal lineWidth);
     void setHighlightCurrentLayer(bool highlight);
+    void setHighlightHoveredObject(bool highlight);
     void setShowTilesetGrid(bool showTilesetGrid);
     void setAutomappingDrawing(bool enabled);
     void setOpenLastFilesOnStartup(bool load);
@@ -190,6 +193,7 @@ signals:
     void gridFineChanged(int gridFine);
     void objectLineWidthChanged(qreal lineWidth);
     void highlightCurrentLayerChanged(bool highlight);
+    void highlightHoveredObjectChanged(bool highlight);
     void showTilesetGridChanged(bool showTilesetGrid);
     void objectLabelVisibilityChanged(ObjectLabelVisiblity);
     void labelForHoveredObjectChanged(bool enabled);
@@ -236,6 +240,7 @@ private:
     int mGridFine;
     qreal mObjectLineWidth;
     bool mHighlightCurrentLayer;
+    bool mHighlightHoveredObject;
     bool mShowTilesetGrid;
     bool mOpenLastFilesOnStartup;
     ObjectLabelVisiblity mObjectLabelVisibility;
@@ -288,6 +293,11 @@ inline QColor Preferences::selectionColor() const
 inline bool Preferences::safeSavingEnabled() const
 {
     return mSafeSavingEnabled;
+}
+
+inline bool Preferences::highlightHoveredObject() const
+{
+    return mHighlightHoveredObject;
 }
 
 inline Preferences::ObjectLabelVisiblity Preferences::objectLabelVisibility() const
