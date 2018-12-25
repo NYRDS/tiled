@@ -237,6 +237,37 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
             }
             mapJson.insert("mobs",mobs);
         }
+
+
+        if(layer->name()=="objects") {
+            QJsonArray objects;
+
+            auto mobsTileset = layer->asTileLayer()->usedTilesets().begin()->data();
+
+            for(int j=0;j<layer->map()->height();++j){
+                for(int i=0;i<layer->map()->width();++i){
+                    int tileId = layer->asTileLayer()->cellAt(i,j).tileId();
+
+                    if(tileId >= 0) {
+                        QJsonObject object;
+                        object.insert("x",i);
+                        object.insert("y",j);
+
+                        auto tile = mobsTileset->findTile(tileId);
+
+                        if(tile && !tile->property("kind").toString().isEmpty()) {
+                            object.insert("kind",tile->property("kind").toString());
+                        } else {
+                            mError = tr("'kind' property not defined for object, position in tileset : %1").arg(tileId);
+                            return false;
+                        }
+                        objects.append(object);
+                    }
+
+                }
+            }
+            mapJson.insert("objects",objects);
+        }
     }
 
     if(!mapJson.contains("tiles")){
