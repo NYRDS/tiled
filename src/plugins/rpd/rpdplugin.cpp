@@ -256,7 +256,11 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
                         auto tile = mobsTileset->findTile(tileId);
 
                         if(tile && !tile->property("kind").toString().isEmpty()) {
-                            object.insert("kind",tile->property("kind").toString());
+                            QMapIterator<QString, QVariant> i(tile->properties());
+                            while (i.hasNext()) {
+                                i.next();
+                                object.insert(i.key(),i.value().toString());
+                            }
                         } else {
                             mError = tr("'kind' property not defined for object, position in tileset : %1").arg(tileId);
                             return false;
