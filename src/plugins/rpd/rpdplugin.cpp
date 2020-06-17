@@ -24,6 +24,7 @@
 #include "maptovariantconverter.h"
 #include "varianttomapconverter.h"
 #include "savefile.h"
+#include "objectgroup.h"
 
 #include "qjsonparser/json.h"
 
@@ -118,7 +119,7 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
 
     for(Tiled::Layer *layer: map->layers()) {
 
-        if(!insertTilesetFile(*layer,QString("tiles_")+layer->name(),mapJson)) {
+        if(layer->layerType()==Tiled::Layer::TileLayerType && !insertTilesetFile(*layer,QString("tiles_")+layer->name(),mapJson)) {
             return false;
         }
 
@@ -271,6 +272,24 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
                 }
             }
             mapJson.insert("objects",objects);
+        }
+
+        if(layer->name()=="items") {
+            QJsonArray items;
+            for (auto item : layer->asObjectGroup()->objects()) {
+
+                QJsonObject itemDesc;
+
+                itemDesc.insert("kind",item->name());
+
+                auto properties = item->properties();
+                for (auto i = properties.begin(); i != properties.end(); ++i) {
+                    itemDesc.insert(i.key(),i.value().toJsonValue());
+                }
+
+                items.append(itemDesc);
+            }
+            mapJson.insert("items", items);
         }
     }
 
