@@ -34,6 +34,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QTextStream>
+#include <QtMath>
 
 namespace Rpd {
 
@@ -209,87 +210,30 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
             mapJson.insert("decoDesc",decoDesc);
         }
 
-        if(layer->name()=="mobs") {
-            QJsonArray mobs;
-
-            auto mobsTileset = layer->asTileLayer()->usedTilesets().begin()->data();
-
-            for(int j=0;j<layer->map()->height();++j){
-                for(int i=0;i<layer->map()->width();++i){
-                    int tileId = layer->asTileLayer()->cellAt(i,j).tileId();
-
-                    if(tileId >= 0) {
-                        QJsonObject mob;
-                        mob.insert("x",i);
-                        mob.insert("y",j);
-
-                        auto tile = mobsTileset->findTile(tileId);
-
-                        if(tile && !tile->property("kind").toString().isEmpty()) {
-                            mob.insert("kind",tile->property("kind").toString());
-                        } else {
-                            mError = tr("'kind' property not defined for mob, position in tileset : %1").arg(tileId);
-                            return false;
-                        }
-                        mobs.append(mob);
-                    }
-
-                }
-            }
-            mapJson.insert("mobs",mobs);
-        }
-
-
         if(layer->name()=="objects") {
-            QJsonArray objects;
 
-            auto mobsTileset = layer->asTileLayer()->usedTilesets().begin()->data();
+            QMap<QString, QJsonArray> objects;
 
-            for(int j=0;j<layer->map()->height();++j){
-                for(int i=0;i<layer->map()->width();++i){
-                    int tileId = layer->asTileLayer()->cellAt(i,j).tileId();
+            for (auto object : layer->asObjectGroup()->objects()) {
 
-                    if(tileId >= 0) {
-                        QJsonObject object;
-                        object.insert("x",i);
-                        object.insert("y",j);
+                QJsonObject desc;
 
-                        auto tile = mobsTileset->findTile(tileId);
+                desc.insert("kind",object->name());
 
-                        if(tile && !tile->property("kind").toString().isEmpty()) {
-                            QMapIterator<QString, QVariant> i(tile->properties());
-                            while (i.hasNext()) {
-                                i.next();
-                                object.insert(i.key(),i.value().toString());
-                            }
-                        } else {
-                            mError = tr("'kind' property not defined for object, position in tileset : %1").arg(tileId);
-                            return false;
-                        }
-                        objects.append(object);
-                    }
+                desc.insert("x",qFloor(object->x()/16.));
+                desc.insert("y",qFloor(object->y()/16.));
 
-                }
-            }
-            mapJson.insert("objects",objects);
-        }
-
-        if(layer->name()=="items") {
-            QJsonArray items;
-            for (auto item : layer->asObjectGroup()->objects()) {
-
-                QJsonObject itemDesc;
-
-                itemDesc.insert("kind",item->name());
-
-                auto properties = item->properties();
+                auto properties = object->properties();
                 for (auto i = properties.begin(); i != properties.end(); ++i) {
-                    itemDesc.insert(i.key(),i.value().toJsonValue());
+                    desc.insert(i.key(),i.value().toJsonValue());
                 }
 
-                items.append(itemDesc);
+                objects[object->type()].append(desc);
             }
-            mapJson.insert("items", items);
+
+            for (auto key : objects.keys() ) {
+                mapJson.insert(key + "s", objects[key]);
+            }
         }
     }
 
