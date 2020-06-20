@@ -225,6 +225,14 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
 
                 auto properties = object->properties();
                 for (auto i = properties.begin(); i != properties.end(); ++i) {
+
+                    auto jsonCandidate = QJsonDocument::fromJson(i.value().toString().toUtf8());
+
+                    if(jsonCandidate.isObject()) {
+                        desc.insert(i.key(),jsonCandidate.object());
+                        continue;
+                    }
+
                     desc.insert(i.key(),i.value().toJsonValue());
                 }
 
