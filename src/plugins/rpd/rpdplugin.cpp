@@ -77,7 +77,7 @@ bool RpdMapFormat::insertTilesetFile(Tiled::Layer &layer, const QString &tiles_n
 
     if(tilesets.size()>1) {
         QString msg = QString("Only one tileset per layer supported (")+layer.name()+" layer) ->\n";
-        for(auto tileset: tilesets) {
+        for(auto &tileset: qAsConst(tilesets)) {
             msg += "[" + tileset->name() + "]\n";
         }
         mError = tr(msg.toUtf8());
@@ -120,7 +120,7 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
 
     for(Tiled::Layer *layer: map->layers()) {
 
-        if(layer->layerType()==Tiled::Layer::TileLayerType && !insertTilesetFile(*layer,QString("tiles_")+layer->name(),mapJson)) {
+        if(layer->isTileLayer() && !insertTilesetFile(*layer,QString("tiles_")+layer->name(),mapJson)) {
             return false;
         }
 
@@ -210,7 +210,22 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
             mapJson.insert("decoDesc",decoDesc);
         }
 
+        if(layer->name()=="mobs") {
+            mError = "Mobs layer are deprecated, please put all mobs in objects layer";
+            return false;
+        }
+
+        if(layer->name()=="items") {
+            mError = "Items layer are deprecated, please put all mobs in objects layer";
+            return false;
+        }
+
         if(layer->name()=="objects") {
+
+            if(!layer->isObjectGroup()) {
+                mError = "Objects layer must be objects type layer";
+                return false;
+            }
 
             QMap<QString, QJsonArray> objects;
 
@@ -239,7 +254,7 @@ bool RpdMapFormat::write(const Tiled::Map *map, const QString &fileName)
                 objects[object->type()].append(desc);
             }
 
-            for (auto key : objects.keys() ) {
+            for (auto &key : objects.keys() ) {
                 mapJson.insert(key + "s", objects[key]);
             }
         }
